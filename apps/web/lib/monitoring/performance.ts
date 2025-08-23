@@ -21,7 +21,6 @@ interface PageLoadMetrics {
 class PerformanceMonitor {
   private metrics: PerformanceMetric[] = []
   private observers: Map<string, PerformanceObserver> = new Map()
-  private isRecording = false
   private batchTimer: NodeJS.Timeout | null = null
   private readonly BATCH_SIZE = 50
   private readonly BATCH_INTERVAL = 30000 // 30 seconds

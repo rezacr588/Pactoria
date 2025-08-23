@@ -71,14 +71,17 @@ export function handleAPIError(
   
   // Handle known API errors
   if (error instanceof APIError) {
+    const errorResponse: any = {
+      error: error.message,
+      details: error.details,
+      timestamp,
+      requestId
+    };
+    if (error.code) {
+      errorResponse.code = error.code;
+    }
     return NextResponse.json<ErrorResponse>(
-      {
-        error: error.message,
-        code: error.code,
-        details: error.details,
-        timestamp,
-        requestId
-      },
+      errorResponse,
       { 
         status: error.statusCode,
         headers: {

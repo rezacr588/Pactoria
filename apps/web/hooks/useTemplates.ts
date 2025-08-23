@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
 import type { Template } from '@/types'
 
-export interface TemplateWithVariables extends Template {
+export interface TemplateWithVariables extends Omit<Template, 'variables'> {
   variables?: Array<{
     name: string
     type: string

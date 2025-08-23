@@ -79,7 +79,10 @@ class Logger {
       timestamp: new Date().toISOString(),
       level,
       message,
-      context,
+    }
+    
+    if (context) {
+      entry.context = context
     }
 
     if (error) {
@@ -88,7 +91,9 @@ class Logger {
         message: error.message,
         stack: error.stack,
       } as Error
-      entry.stack = error.stack
+      if (error.stack) {
+        entry.stack = error.stack
+      }
     }
 
     const formatted = this.formatLog(entry)

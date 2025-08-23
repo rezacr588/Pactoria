@@ -151,7 +151,7 @@ class ContractsService {
    * Note: Real-time subscriptions should be handled at the component level
    * using the Supabase client directly for better performance
    */
-  subscribeToContractUpdates(callback: (payload: any) => void) {
+  subscribeToContractUpdates(_callback: (payload: any) => void) {
     // This will be implemented at component level
     console.log('Real-time subscriptions should be handled at component level')
     return { unsubscribe: () => {} }
@@ -160,45 +160,13 @@ class ContractsService {
   /**
    * Subscribe to real-time activity updates
    */
-  subscribeToActivityUpdates(callback: (payload: any) => void) {
+  subscribeToActivityUpdates(_callback: (payload: any) => void) {
     // This will be implemented at component level
     console.log('Real-time subscriptions should be handled at component level')
     return { unsubscribe: () => {} }
   }
 
-  /**
-   * Calculate progress based on contract status
-   */
-  private calculateProgress(status: string): number {
-    const progressMap: Record<string, number> = {
-      'draft': 25,
-      'negotiation': 45,
-      'review': 75,
-      'approved': 90,
-      'signed': 100,
-      'expired': 100,
-    }
-    return progressMap[status] || 0
-  }
 
-  /**
-   * Format timestamp to relative time
-   */
-  private formatTimestamp(timestamp: string): string {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMins < 1) return 'just now'
-    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-    
-    return date.toLocaleDateString()
-  }
 }
 
 // Create singleton instance

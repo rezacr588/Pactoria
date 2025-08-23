@@ -44,15 +44,15 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   const supabase = createSupabaseClient(request)
   
-  let content = body.content
+  let content = body!.content
   let templateVariables = null
 
   // If template is specified, fetch and process it
-  if (body.templateId) {
+  if (body!.templateId) {
     const { data: template, error: templateError } = await supabase
       .from('templates')
       .select('content_md, variables, title')
-      .eq('id', body.templateId)
+      .eq('id', body!.templateId)
       .eq('published', true)
       .single()
 
@@ -66,36 +66,36 @@ export const POST = apiHandler(async (request: NextRequest) => {
     templateVariables = template.variables
 
     // If no title provided, use template title
-    if (!body.title || body.title.trim() === '') {
-      body.title = `${template.title} - ${new Date().toLocaleDateString()}`
+    if (!body!.title || body!.title.trim() === '') {
+      body!.title = `${template.title} - ${new Date().toLocaleDateString()}`
     }
 
     // Process template variables if provided
-    if (body.templateVariables && template.variables) {
+    if (body!.templateVariables && template.variables) {
       const variables = Array.isArray(template.variables) ? template.variables : template.variables.variables || []
       
       variables.forEach((variable: any) => {
-        const value = body.templateVariables[variable.name]
+        const value = body!.templateVariables?.[variable.name]
         if (value !== undefined && value !== null) {
           const placeholder = `[${variable.name}]`
-          content = content.replace(new RegExp(placeholder, 'g'), String(value))
+          content = content?.replace(new RegExp(placeholder, 'g'), String(value)) || content
         }
       })
     }
 
     // Increment template usage
-    await supabase.rpc('increment_template_usage', { template_id: body.templateId })
+    await supabase.rpc('increment_template_usage', { template_id: body!.templateId })
   }
   
   // Create contract with metadata
   const metadata: any = {
-    template_id: body.templateId || null,
+    template_id: body!.templateId || null,
     template_variables: templateVariables,
-    filled_variables: body.templateVariables || null
+    filled_variables: body!.templateVariables || null
   }
   
-  if (body.description) {
-    metadata.description = body.description
+  if (body!.description) {
+    metadata.description = body!.description
   }
   
   // Start with version 1 if content is provided, otherwise 0
@@ -105,9 +105,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const { data: contract, error: contractError } = await supabase
     .from('contracts')
     .insert({
-      title: body.title,
+      title: body!.title,
       owner_id: userId,
-      status: body.status || 'draft',
+      status: body!.status || 'draft',
       latest_version_number: initialVersion,
       metadata: metadata
     })

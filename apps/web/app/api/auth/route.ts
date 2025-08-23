@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
+// Ensure this route is not statically pre-rendered
+export const dynamic = 'force-dynamic';
+
 // SECURITY: Never use service role key in API routes accessible from client
 // Use anon key with proper Authorization headers for RLS
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;

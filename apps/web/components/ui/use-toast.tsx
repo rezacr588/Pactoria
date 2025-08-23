@@ -10,6 +10,8 @@ type ToasterToast = {
   action?: React.ReactNode
   variant?: "default" | "destructive"
   duration?: number
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 const actionTypes = {
@@ -181,7 +183,7 @@ function useToast() {
   return {
     ...state,
     toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+    dismiss: (toastId?: string) => dispatch(toastId ? { type: "DISMISS_TOAST", toastId } : { type: "DISMISS_TOAST" }),
   }
 }
 

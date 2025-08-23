@@ -156,7 +156,7 @@ export function withErrorBoundary<P extends object>(
 ) {
   return function WithErrorBoundaryComponent(props: P) {
     return (
-      <ErrorBoundary fallback={fallback} onError={onError}>
+      <ErrorBoundary fallback={fallback} {...(onError ? { onError } : {})}>
         <Component {...props} />
       </ErrorBoundary>
     )

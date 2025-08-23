@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -153,7 +153,7 @@ export function ContractEditor({ contractId, initialContent, onContentChange }: 
         throw new Error('Not authenticated')
       }
 
-      const { data, error } = await supabase.rpc('take_snapshot', {
+      const { error } = await supabase.rpc('take_snapshot', {
         p_contract_id: contractId,
         p_content_json: contentJson,
         p_content_md: null,

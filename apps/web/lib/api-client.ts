@@ -13,7 +13,7 @@ import type {
   User,
   Session,
   ApiError
-} from './types'
+} from '@/types'
 
 class ApiClient {
   private baseUrl: string
@@ -37,7 +37,7 @@ class ApiClient {
     }
 
     if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.token}`
     }
 
     const response = await fetch(`${this.baseUrl}${path}`, {

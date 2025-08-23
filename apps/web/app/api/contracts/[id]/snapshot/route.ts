@@ -1,61 +1,59 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { 
+  apiHandler, 
+  createSupabaseClient, 
+  requireAuth, 
+  successResponse, 
+  errorResponse,
+  validateBody
+} from '@/lib/api/utils'
 
-// Create Supabase client with RLS
-function createRLSClient(authHeader?: string) {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: authHeader ? { Authorization: authHeader } : {}
-      }
-    }
+// Snapshot schema
+const snapshotSchema = z.object({
+  content_json: z.any().optional(),
+  content_md: z.string().optional(),
+  ydoc_state: z.string().optional() // Base64 encoded
+}).refine(data => data.content_json || data.content_md || data.ydoc_state, {
+  message: 'At least one content type is required'
+})
+
+export const POST = apiHandler(async (request: NextRequest, { params }: { params: { id: string } }) => {
+  // Check authentication
+  const { error: authError } = await requireAuth(request)
+  if (authError) return authError
+
+  // Validate request body
+  const { data: body, error: validationError } = await validateBody(
+    request,
+    snapshotSchema
   )
-}
+  if (validationError) return validationError
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  const supabase = createSupabaseClient(request)
+  const contractId = params.id
+
   try {
-    const authHeader = request.headers.get('Authorization')
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const supabase = createRLSClient(authHeader)
-    const contractId = params.id
-    const body = await request.json()
-    
-    // Validate input
-    if (!body.content_json && !body.content_md && !body.ydoc_state_base64) {
-      return NextResponse.json(
-        { error: 'At least one content type is required' },
-        { status: 400 }
-      )
-    }
-    
-    // Call the RPC function to create snapshot
-    const { data, error } = await supabase.rpc('take_snapshot', {
+    // Call the RPC function to create snapshot atomically
+    const { data: version, error } = await supabase.rpc('create_version_snapshot', {
       p_contract_id: contractId,
-      p_content_json: body.content_json || null,
-      p_content_md: body.content_md || null,
-      p_ydoc_state_base64: body.ydoc_state_base64 || null
+      p_content_json: body!.content_json || null,
+      p_content_md: body!.content_md || null,
+      p_ydoc_state_base64: body!.ydoc_state || null
     })
     
     if (error) {
       console.error('Error creating snapshot:', error)
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      return errorResponse(error.message, 400)
     }
     
-    return NextResponse.json({ version: data })
+    // The RPC returns a table, so get the first row
+    const versionData = Array.isArray(version) ? version[0] : version
     
-  } catch (error) {
+    return successResponse({ version: versionData })
+    
+  } catch (error: any) {
     console.error('Snapshot API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return errorResponse(error.message, 500)
   }
-}
+})

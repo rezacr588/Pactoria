@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import contractsService, { 
+import contractsService from '@/lib/services/contracts'
+import type { 
   ContractStats, 
   ContractWithDetails, 
   RecentActivity 
-} from '@/lib/services/contracts'
+} from '@/types'
 import { 
   FileText, 
   Plus, 
@@ -19,46 +19,32 @@ import {
   Calendar,
   Download,
   Filter,
-  Search,
   MoreHorizontal,
   ArrowUpRight,
   ArrowDownRight,
-  CheckCircle,
   AlertCircle,
-  XCircle,
-  User,
-  Settings,
-  LogOut,
-  Bell,
   ChevronRight,
   Briefcase,
   FileSignature,
-  Folder,
-  Star,
-  Loader2
+  Folder
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 
 export default function Dashboard() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [timeRange, setTimeRange] = useState('7d')
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<ContractStats | null>(null)
   const [recentContracts, setRecentContracts] = useState<ContractWithDetails[]>([])
@@ -66,24 +52,24 @@ export default function Dashboard() {
 
   // Load dashboard data
   useEffect(() => {
-    if (user) {
-      loadDashboardData()
-      
-      // Set up real-time subscriptions
-      const contractsSub = contractsService.subscribeToContractUpdates((payload) => {
-        console.log('Contract update:', payload)
-        loadDashboardData() // Reload data on changes
-      })
+    if (!user) return
 
-      const activitySub = contractsService.subscribeToActivityUpdates((payload) => {
-        console.log('New activity:', payload)
-        loadActivities() // Reload activities on new events
-      })
+    loadDashboardData()
+    
+    // Set up real-time subscriptions
+    const contractsSub = contractsService.subscribeToContractUpdates((payload) => {
+      console.log('Contract update:', payload)
+      loadDashboardData() // Reload data on changes
+    })
 
-      return () => {
-        contractsSub.unsubscribe()
-        activitySub.unsubscribe()
-      }
+    const activitySub = contractsService.subscribeToActivityUpdates((payload) => {
+      console.log('New activity:', payload)
+      loadActivities() // Reload activities on new events
+    })
+
+    return () => {
+      contractsSub.unsubscribe()
+      activitySub.unsubscribe()
     }
   }, [user])
 

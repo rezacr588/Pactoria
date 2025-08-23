@@ -32,13 +32,13 @@ interface PresenceAvatarsProps {
 }
 
 // Generate a random color for the user
-const generateUserColor = (userId: string) => {
+const generateUserColor = (userId: string): string => {
   const colors = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
     '#DDA0DD', '#98D8C8', '#FFD93D', '#6BCB77', '#4D96FF'
   ]
   const index = userId.charCodeAt(0) % colors.length
-  return colors[index]
+  return colors[index] || '#4D96FF'
 }
 
 // Get initials from name or email
@@ -62,7 +62,7 @@ export default function PresenceAvatars({
   showCursors = false
 }: PresenceAvatarsProps) {
   const [presenceChannel, setPresenceChannel] = useState<RealtimeChannel | null>(null)
-  const [presenceState, setPresenceState] = useState<RealtimePresenceState<PresenceUser>>({})
+  const [, setPresenceState] = useState<RealtimePresenceState<PresenceUser>>({})
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([])
 
   useEffect(() => {
@@ -107,8 +107,8 @@ export default function PresenceAvatars({
           id: currentUser.id,
           name: currentUser.name || 'Anonymous',
           email: currentUser.email,
-          avatar: currentUser.avatar,
-          color: generateUserColor(currentUser.id),
+          avatar: currentUser.avatar || '',
+          color: generateUserColor(currentUser.id || 'anonymous'),
           lastSeen: Date.now()
         }
         

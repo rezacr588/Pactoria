@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +19,6 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [acceptTerms, setAcceptTerms] = useState(false)
   const { signUp } = useAuth()
-  const router = useRouter()
 
   const passwordRequirements = [
     { met: password.length >= 8, text: 'At least 8 characters' },

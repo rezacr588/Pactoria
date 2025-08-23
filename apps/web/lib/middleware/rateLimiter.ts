@@ -190,7 +190,7 @@ export class RateLimiter {
       
       if (this.config.headers) {
         response.headers.set('X-RateLimit-Limit', this.config.maxRequests.toString())
-        response.headers.set('X-RateLimit-Remaining', '0')
+        response.headers.set('X-RateLimit-Remaining', remaining.toString())
         response.headers.set('X-RateLimit-Reset', resetDate.toISOString())
         response.headers.set('Retry-After', Math.ceil((entry.resetTime - Date.now()) / 1000).toString())
       }
@@ -254,7 +254,7 @@ export class RateLimiter {
 
 // Factory function to create rate limiters with different configurations
 export function createRateLimiter(type: 'api' | 'auth' | 'upload' | 'search'): RateLimiter {
-  const configs: Record<string, RateLimitConfig> = {
+  const configs: Record<'api' | 'auth' | 'upload' | 'search', RateLimitConfig> = {
     api: {
       windowMs: 60 * 1000, // 1 minute
       maxRequests: 100,
@@ -265,12 +265,10 @@ export function createRateLimiter(type: 'api' | 'auth' | 'upload' | 'search'): R
       maxRequests: 5,
       message: 'Too many authentication attempts. Please try again later.',
       keyGenerator: (req) => {
-        // Use email if available, otherwise IP
-        const body = req.body
-        const email = body?.email || 'unknown'
+        // Use IP for auth rate limiting since we can't access parsed body in middleware
         const forwarded = req.headers.get('x-forwarded-for')
-        const ip = forwarded ? forwarded.split(',')[0] : 'unknown'
-        return `auth:${email}:${ip}`
+        const ip = forwarded ? forwarded.split(',')[0] : req.headers.get('x-real-ip') || 'unknown'
+        return `auth:${ip}`
       }
     },
     upload: {

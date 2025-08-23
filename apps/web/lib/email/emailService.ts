@@ -294,14 +294,21 @@ export async function sendEmail(template: EmailTemplate) {
   }
 
   try {
-    const { data, error } = await resend.emails.send({
+    const emailPayload: any = {
       from: template.from || 'Contract Manager <noreply@contractmanager.app>',
       to: template.to,
       subject: template.subject,
       html: template.html,
-      text: template.text,
-      reply_to: template.replyTo
-    })
+    };
+    
+    if (template.text) {
+      emailPayload.text = template.text;
+    }
+    if (template.replyTo) {
+      emailPayload.replyTo = template.replyTo;
+    }
+    
+    const { data, error } = await resend.emails.send(emailPayload)
 
     if (error) {
       console.error('Error sending email:', error)

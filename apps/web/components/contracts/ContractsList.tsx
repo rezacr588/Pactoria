@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
-import type { Contract } from '@/lib/types'
+import type { Contract } from '@/types'
 import { Plus, FileText, Clock, CheckCircle, XCircle, Edit2, Trash2 } from 'lucide-react'
 
 export function ContractsList() {
@@ -33,33 +33,46 @@ export function ContractsList() {
     },
   })
 
-  const getStatusIcon = (status: Contract['status']) => {
-    switch (status) {
-      case 'draft':
-        return <Edit2 className="h-4 w-4 text-gray-500" />
-      case 'in_review':
-        return <Clock className="h-4 w-4 text-yellow-500" />
-      case 'approved':
-        return <CheckCircle className="h-4 w-4 text-green-500" />
-      case 'rejected':
-        return <XCircle className="h-4 w-4 text-red-500" />
-      case 'signed':
-        return <CheckCircle className="h-4 w-4 text-blue-500" />
-      default:
-        return <FileText className="h-4 w-4 text-gray-400" />
+  // Memoized status configurations for better performance
+  const statusConfig = useMemo(() => ({
+    draft: { 
+      icon: <Edit2 className="h-4 w-4 text-gray-500" />, 
+      badge: 'bg-gray-100 text-gray-800',
+      label: 'Draft'
+    },
+    in_review: { 
+      icon: <Clock className="h-4 w-4 text-yellow-500" />, 
+      badge: 'bg-yellow-100 text-yellow-800',
+      label: 'In Review'
+    },
+    approved: { 
+      icon: <CheckCircle className="h-4 w-4 text-green-500" />, 
+      badge: 'bg-green-100 text-green-800',
+      label: 'Approved'
+    },
+    rejected: { 
+      icon: <XCircle className="h-4 w-4 text-red-500" />, 
+      badge: 'bg-red-100 text-red-800',
+      label: 'Rejected'
+    },
+    signed: { 
+      icon: <CheckCircle className="h-4 w-4 text-blue-500" />, 
+      badge: 'bg-blue-100 text-blue-800',
+      label: 'Signed'
     }
-  }
+  }), [])
 
-  const getStatusBadge = (status: Contract['status']) => {
-    const colors = {
-      draft: 'bg-gray-100 text-gray-800',
-      in_review: 'bg-yellow-100 text-yellow-800',
-      approved: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800',
-      signed: 'bg-blue-100 text-blue-800',
-    }
-    return colors[status] || 'bg-gray-100 text-gray-800'
-  }
+  const getStatusIcon = useCallback((status: Contract['status']) => {
+    return statusConfig[status as keyof typeof statusConfig]?.icon || <FileText className="h-4 w-4 text-gray-400" />
+  }, [statusConfig])
+
+  const getStatusBadge = useCallback((status: Contract['status']) => {
+    return statusConfig[status as keyof typeof statusConfig]?.badge || 'bg-gray-100 text-gray-800'
+  }, [statusConfig])
+
+  const getStatusLabel = useCallback((status: Contract['status']) => {
+    return statusConfig[status as keyof typeof statusConfig]?.label || status.replace('_', ' ')
+  }, [statusConfig])
 
   if (isLoading) {
     return (
@@ -85,9 +98,10 @@ export function ContractsList() {
         <h2 className="text-2xl font-bold text-gray-900">Contracts</h2>
         <button
           onClick={() => setShowCreateForm(true)}
-          className="flex items-center space-x-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+          className="flex items-center space-x-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+          aria-label="Create new contract"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" aria-hidden="true" />
           <span>New Contract</span>
         </button>
       </div>
@@ -111,11 +125,15 @@ export function ContractsList() {
               placeholder="Contract title"
               className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               disabled={createMutation.isPending}
+              aria-label="Contract title"
+              aria-describedby="title-help"
+              maxLength={200}
             />
             <button
               type="submit"
               disabled={createMutation.isPending || !newTitle.trim()}
-              className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              aria-describedby="create-button-help"
             >
               {createMutation.isPending ? 'Creating...' : 'Create'}
             </button>
@@ -125,7 +143,8 @@ export function ContractsList() {
                 setShowCreateForm(false)
                 setNewTitle('')
               }}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              aria-label="Cancel contract creation"
             >
               Cancel
             </button>
@@ -141,9 +160,10 @@ export function ContractsList() {
           <div className="mt-6">
             <button
               onClick={() => setShowCreateForm(true)}
-              className="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+              className="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              aria-label="Create your first contract"
             >
-              <Plus className="-ml-1 mr-2 h-5 w-5" />
+              <Plus className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
               New Contract
             </button>
           </div>
@@ -176,9 +196,10 @@ export function ContractsList() {
                   <td className="whitespace-nowrap px-6 py-4">
                     <Link
                       href={`/contracts/${contract.id}`}
-                      className="flex items-center space-x-2 text-sm font-medium text-gray-900 hover:text-primary-600"
+                      className="flex items-center space-x-2 text-sm font-medium text-gray-900 hover:text-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded"
+                      aria-label={`View contract: ${contract.title}`}
                     >
-                      <FileText className="h-4 w-4" />
+                      <FileText className="h-4 w-4" aria-hidden="true" />
                       <span>{contract.title}</span>
                     </Link>
                   </td>
@@ -189,7 +210,7 @@ export function ContractsList() {
                       )}`}
                     >
                       {getStatusIcon(contract.status)}
-                      <span>{contract.status.replace('_', ' ')}</span>
+                      <span>{getStatusLabel(contract.status)}</span>
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
@@ -202,19 +223,22 @@ export function ContractsList() {
                     <div className="flex items-center justify-end space-x-2">
                       <Link
                         href={`/contracts/${contract.id}`}
-                        className="text-primary-600 hover:text-primary-900"
+                        className="text-primary-600 hover:text-primary-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded px-2 py-1"
+                        aria-label={`Edit contract: ${contract.title}`}
                       >
                         Edit
                       </Link>
                       <button
                         onClick={() => {
-                          if (confirm('Are you sure you want to delete this contract?')) {
+                          if (confirm(`Are you sure you want to delete "${contract.title}"? This action cannot be undone.`)) {
                             deleteMutation.mutate(contract.id)
                           }
                         }}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-red-600 hover:text-red-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded p-1"
+                        aria-label={`Delete contract: ${contract.title}`}
+                        disabled={deleteMutation.isPending}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
                   </td>

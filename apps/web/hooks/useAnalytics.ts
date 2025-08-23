@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabaseClient'
-import { Contract } from '@/types'
 
 interface MonthlyTrend {
   month: string
@@ -10,21 +9,8 @@ interface MonthlyTrend {
   risks: number
 }
 
-interface RiskData {
-  category: string
-  count: number
-}
 
-interface CycleTimeData {
-  stage: string
-  days: number
-}
 
-interface ContractActivity {
-  date: string
-  count: number
-  type: string
-}
 
 export function useAnalytics() {
   const [dateRange, setDateRange] = useState({
@@ -51,11 +37,11 @@ export function useAnalytics() {
       
       contracts?.forEach(contract => {
         const date = new Date(contract.created_at)
-        const monthKey = `${months[date.getMonth()]} ${date.getFullYear()}`
+        const monthKey = `${months[date.getMonth()] || 'Unknown'} ${date.getFullYear()}`
         
         if (!monthlyData.has(monthKey)) {
           monthlyData.set(monthKey, {
-            month: months[date.getMonth()],
+            month: months[date.getMonth()] || 'Unknown',
             contracts: 0,
             approvals: 0,
             risks: 0
@@ -80,7 +66,7 @@ export function useAnalytics() {
       for (let i = 5; i >= 0; i--) {
         const date = new Date()
         date.setMonth(date.getMonth() - i)
-        const monthName = months[date.getMonth()]
+        const monthName = months[date.getMonth()] || 'Unknown'
         
         const existing = Array.from(monthlyData.values()).find(d => d.month === monthName)
         
@@ -153,9 +139,9 @@ export function useAnalytics() {
       if (error) throw error
 
       // Calculate average time between stages
-      let draftToReview = []
-      let reviewToApproval = []
-      let approvalToSigned = []
+      let draftToReview: number[] = []
+      let reviewToApproval: number[] = []
+      let approvalToSigned: number[] = []
 
       contracts?.forEach(contract => {
         const versions = contract.contract_versions || []
@@ -163,16 +149,16 @@ export function useAnalytics() {
         if (versions.length > 1) {
           // Calculate days between versions
           for (let i = 1; i < versions.length; i++) {
-            const prevDate = new Date(versions[i - 1].created_at)
-            const currDate = new Date(versions[i].created_at)
+            const prevDate = new Date(versions[i - 1]?.created_at)
+            const currDate = new Date(versions[i]?.created_at)
             const daysDiff = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24)
             
             // Estimate which transition this represents based on version number
-            if (versions[i].version_number === 2) {
+            if (versions[i]?.version_number === 2) {
               draftToReview.push(daysDiff)
-            } else if (versions[i].version_number === 3) {
+            } else if (versions[i]?.version_number === 3) {
               reviewToApproval.push(daysDiff)
-            } else if (versions[i].version_number >= 4) {
+            } else if ((versions[i]?.version_number ?? 0) >= 4) {
               approvalToSigned.push(daysDiff)
             }
           }
@@ -284,7 +270,7 @@ export function useAnalytics() {
         if (dates.length >= 2) {
           dates.sort((a, b) => b.getTime() - a.getTime())
           for (let i = 1; i < dates.length; i++) {
-            const hoursDiff = (dates[i - 1].getTime() - dates[i].getTime()) / (1000 * 60 * 60)
+            const hoursDiff = ((dates[i - 1]?.getTime() ?? 0) - (dates[i]?.getTime() ?? 0)) / (1000 * 60 * 60)
             totalHours += hoursDiff
             count++
           }

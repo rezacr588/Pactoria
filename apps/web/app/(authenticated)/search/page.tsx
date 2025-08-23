@@ -6,8 +6,6 @@ import SearchBar from '@/components/search/SearchBar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -23,8 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -150,11 +147,22 @@ export default function SearchPage() {
 
         if (contracts) {
           searchResults.push(
-            ...contracts.map(c => ({
-              ...c,
-              type: 'contract' as const,
-              collaborators: c.collaborators?.map((collab: any) => collab.user).filter(Boolean) || []
-            }))
+            ...contracts.map(c => {
+              const owner = Array.isArray(c.owner) ? c.owner[0] : c.owner
+              const result: any = {
+                ...c,
+                type: 'contract' as const,
+                collaborators: c.collaborators?.map((collab: any) => collab.user).filter(Boolean) || []
+              }
+              if (owner) {
+                result.owner = {
+                  id: owner.id,
+                  email: owner.email,
+                  name: owner.name as string | undefined
+                }
+              }
+              return result
+            })
           )
           if (count) setTotalResults(prev => prev + count)
         }
@@ -223,10 +231,21 @@ export default function SearchPage() {
 
         if (templates) {
           searchResults.push(
-            ...templates.map(t => ({
-              ...t,
-              type: 'template' as const
-            }))
+            ...templates.map(t => {
+              const owner = Array.isArray(t.owner) ? t.owner[0] : t.owner
+              const result: any = {
+                ...t,
+                type: 'template' as const
+              }
+              if (owner) {
+                result.owner = {
+                  id: owner.id,
+                  email: owner.email,
+                  name: owner.name as string | undefined
+                }
+              }
+              return result
+            })
           )
           if (count) setTotalResults(prev => prev + count)
         }
@@ -375,10 +394,13 @@ export default function SearchPage() {
               key={status}
               variant="secondary"
               className="cursor-pointer"
-              onClick={() => setFilters({
-                ...filters,
-                status: filters.status?.filter(s => s !== status)
-              })}
+              onClick={() => {
+                const newStatus = filters.status?.filter(s => s !== status)
+                setFilters({
+                  ...filters,
+                  ...(newStatus && newStatus.length > 0 ? { status: newStatus } : {})
+                })
+              }}
             >
               {status.replace('_', ' ')}
               <span className="ml-1">×</span>
@@ -387,7 +409,10 @@ export default function SearchPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setFilters({ ...filters, status: undefined })}
+            onClick={() => {
+              const { status, ...rest } = filters
+              setFilters(rest)
+            }}
           >
             Clear all
           </Button>

@@ -8,7 +8,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { useForm, Controller } from 'react-hook-form'
@@ -76,13 +75,13 @@ export default function SettingsPage() {
     }
   }
 
-  const onPasswordSubmit = async (data: z.infer<typeof passwordFormSchema>) => {
+  const onPasswordSubmit = async (_data: z.infer<typeof passwordFormSchema>) => {
     // This requires a custom implementation to verify the current password before changing it.
     // Supabase doesn't directly support this. You would need a serverless function.
     toast.info('Password change functionality is not yet implemented.')
   }
 
-  const onNotificationsSubmit = (data: z.infer<typeof notificationsFormSchema>) => {
+  const onNotificationsSubmit = (_data: z.infer<typeof notificationsFormSchema>) => {
     toast.success('Notification settings saved')
   }
 
@@ -115,7 +114,7 @@ export default function SettingsPage() {
             <div className="flex items-center space-x-4">
               <Avatar className="h-16 w-16">
                 <AvatarImage src={user.user_metadata.avatar_url} />
-                <AvatarFallback>{user.email?.[0].toUpperCase()}</AvatarFallback>
+                <AvatarFallback>{user.email?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
               </Avatar>
               <Button type="button" variant="outline">Change Avatar</Button>
             </div>
@@ -123,7 +122,7 @@ export default function SettingsPage() {
               <Label htmlFor="name">Name</Label>
               <Input id="name" {...profileForm.register('name')} />
               {profileForm.formState.errors.name && (
-                <p className="text-sm text-red-500">{profileForm.formState.errors.name.message}</p>
+                <p className="text-sm text-red-500">{String(profileForm.formState.errors.name?.message)}</p>
               )}
             </div>
             <div className="space-y-2">

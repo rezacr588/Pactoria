@@ -4,7 +4,7 @@
  */
 
 import jsPDF from 'jspdf';
-import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Packer, BorderStyle, Table, TableRow, TableCell, WidthType } from 'docx';
+import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Packer, Table, TableRow, TableCell, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
 import html2canvas from 'html2canvas';
 
@@ -460,15 +460,23 @@ export async function exportToDOCX(
                         spacing: { after: 100 },
                       }),
                       new Paragraph({
-                        text: signature.party,
-                        bold: true,
+                        children: [
+                          new TextRun({
+                            text: signature.party,
+                            bold: true,
+                          })
+                        ],
                         spacing: { after: 50 },
                       }),
                       ...(signature.signedAt ? [
                         new Paragraph({
-                          text: `Signed: ${signature.signedAt.toLocaleDateString()}`,
-                          size: 20,
-                          color: '666666',
+                          children: [
+                            new TextRun({
+                              text: `Signed: ${signature.signedAt.toLocaleDateString()}`,
+                              size: 20,
+                              color: '666666',
+                            })
+                          ],
                         }),
                       ] : []),
                     ],
@@ -482,11 +490,15 @@ export async function exportToDOCX(
 
         // Footer information
         new Paragraph({
-          text: `Generated on ${new Date().toLocaleDateString()}`,
+          children: [
+            new TextRun({
+              text: `Generated on ${new Date().toLocaleDateString()}`,
+              color: '999999',
+              size: 18,
+            })
+          ],
           alignment: AlignmentType.CENTER,
           spacing: { before: 800 },
-          color: '999999',
-          size: 18,
         }),
       ],
     }],
@@ -495,15 +507,22 @@ export async function exportToDOCX(
   // Add watermark if specified
   if (options.watermark) {
     // Note: Watermarks in DOCX are more complex and would require additional configuration
-    // This is a simplified approach
-    doc.sections[0].children.unshift(
-      new Paragraph({
-        text: options.watermark,
-        alignment: AlignmentType.CENTER,
-        shading: { fill: 'E0E0E0' },
-        spacing: { after: 400 },
-      })
-    );
+    // This is a simplified approach using type assertion
+    const sections = (doc as any).sections;
+    if (sections && sections[0] && sections[0].children) {
+      sections[0].children.unshift(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: options.watermark,
+              color: 'E0E0E0',
+            })
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 400 },
+        })
+      );
+    }
   }
 
   const buffer = await Packer.toBlob(doc);

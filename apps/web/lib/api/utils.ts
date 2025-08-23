@@ -213,13 +213,13 @@ export async function checkPermission(
   supabase: SupabaseClient,
   userId: string,
   resource: string,
-  action: string
+  _action: string
 ): Promise<boolean> {
   try {
     // For contracts, use the has_contract_access function
     if (resource.startsWith('contract:')) {
       const contractId = resource.replace('contract:', '')
-      const { data, error } = await supabase.rpc('has_contract_access', {
+      const { data } = await supabase.rpc('has_contract_access', {
         u: userId,
         c: contractId
       })

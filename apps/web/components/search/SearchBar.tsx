@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -34,6 +33,7 @@ interface SearchResult {
   created_at: string
   updated_at: string
   owner?: {
+    id: string
     email: string
     name?: string
   }
@@ -117,6 +117,7 @@ export default function SearchBar({
                 ...c,
                 type: 'contract' as const,
                 snippet: `Status: ${c.status}`,
+                owner: (c as any).owner?.[0] || undefined,
               }))
             )
           }
@@ -150,6 +151,7 @@ export default function SearchBar({
                 ...t,
                 type: 'template' as const,
                 snippet: t.description || `Category: ${t.category}`,
+                owner: (t as any).owner?.[0] || undefined,
               }))
             )
           }
@@ -206,16 +208,6 @@ export default function SearchBar({
     setQuery('')
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'draft': return 'bg-gray-500'
-      case 'in_review': return 'bg-yellow-500'
-      case 'approved': return 'bg-green-500'
-      case 'rejected': return 'bg-red-500'
-      case 'signed': return 'bg-blue-500'
-      default: return 'bg-gray-500'
-    }
-  }
 
   if (embedded) {
     return (
@@ -428,12 +420,15 @@ export default function SearchBar({
                     key={status}
                     variant={filters.status === status ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => 
-                      setFilters({ 
-                        ...filters, 
-                        status: filters.status === status ? undefined : status 
-                      })
-                    }
+                    onClick={() => {
+                      const newStatus = filters.status === status ? undefined : status;
+                      if (newStatus) {
+                        setFilters({ ...filters, status: newStatus });
+                      } else {
+                        const { status: _, ...rest } = filters;
+                        setFilters(rest);
+                      }
+                    }}
                   >
                     {status.replace('_', ' ')}
                   </Button>

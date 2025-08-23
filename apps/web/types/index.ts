@@ -114,6 +114,13 @@ export interface RiskAnalysisResult {
   suggestions: string[]
 }
 
+// API Response types
+export interface ContractDetailResponse {
+  contract: Contract
+  versions: ContractVersion[]
+  approvals: ContractApproval[]
+}
+
 // Auth types
 export interface User {
   id: string

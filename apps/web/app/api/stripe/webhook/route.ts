@@ -4,6 +4,9 @@ import { validateWebhookSignature } from '@/lib/stripe/client';
 import { createClient } from '@/utils/supabase/server';
 import type Stripe from 'stripe';
 
+// Ensure this route is not statically pre-rendered
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = headers().get('stripe-signature');
@@ -96,11 +99,14 @@ async function handleSubscriptionCreated(
   }
 
   // Get subscription details from Stripe
-  const { stripe } = await import('@/lib/stripe/client');
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const { getStripe } = await import('@/lib/stripe/client');
+  const subscription = await getStripe().subscriptions.retrieve(subscriptionId) as any;
   
   // Determine tier from price ID
-  const priceId = subscription.items.data[0].price.id;
+  const priceId = subscription.items.data[0]?.price?.id;
+  if (!priceId) {
+    throw new Error('No price ID found in subscription');
+  }
   const tier = getTierFromPriceId(priceId);
 
   // Create subscription record
@@ -143,9 +149,12 @@ async function handleSubscriptionCreated(
 
 async function handleSubscriptionUpdate(
   supabase: any,
-  subscription: Stripe.Subscription
+  subscription: any
 ) {
-  const priceId = subscription.items.data[0].price.id;
+  const priceId = subscription.items.data[0]?.price?.id;
+  if (!priceId) {
+    throw new Error('No price ID found in subscription');
+  }
   const tier = getTierFromPriceId(priceId);
 
   // Update subscription record
@@ -296,7 +305,7 @@ async function handleInvoicePaid(
 
 async function handlePaymentFailed(
   supabase: any,
-  invoice: Stripe.Invoice
+  invoice: any
 ) {
   // Notify user of payment failure
   console.log('Payment failed for invoice:', invoice.id);
@@ -364,7 +373,7 @@ function parseStorageLimit(storage: string): number {
   
   const match = storage.match(/(\d+)(MB|GB)/);
   if (match) {
-    return parseInt(match[1]) * units[match[2]];
+    return parseInt(match[1]!) * (units[match[2]!] || 0);
   }
   
   return 0;

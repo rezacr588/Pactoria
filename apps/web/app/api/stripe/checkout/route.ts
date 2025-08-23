@@ -3,6 +3,9 @@ import { createClient } from '@/utils/supabase/server';
 import { createOrRetrieveCustomer, createCheckoutSession } from '@/lib/stripe/client';
 import { SUBSCRIPTION_TIERS } from '@/lib/stripe/config';
 
+// Ensure this route is not statically pre-rendered
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     const supabase = createClient();

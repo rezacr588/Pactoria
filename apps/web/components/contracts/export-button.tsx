@@ -10,7 +10,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
 } from '@/components/ui/dropdown-menu';
 import {
   Dialog,
@@ -25,10 +24,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { exportContract, ExportOptions, ContractData } from '@/lib/export/document-export';
+import { ExportOptions, ContractData } from '@/lib/export/document-export';
 import { hasFeatureAccess } from '@/lib/stripe/config';
 import { toast } from 'sonner';
-import { useAuth } from '@/hooks/useAuth';
 
 interface ExportButtonProps {
   contract: ContractData;
@@ -45,7 +43,6 @@ export function ExportButton({
   size = 'default',
   userTier = 'FREE',
 }: ExportButtonProps) {
-  const { user } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportConfig, setExportConfig] = useState<ExportOptions>({
@@ -67,7 +64,35 @@ export function ExportButton({
 
     setIsExporting(true);
     try {
-      await exportContract(contract, exportConfig);
+      const response = await fetch(`/api/contracts/${contract.id}/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(exportConfig),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Export failed');
+      }
+
+      // Get filename from Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || 
+        `contract.${exportConfig.format}`;
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
       toast.success(`Contract exported successfully as ${exportConfig.format.toUpperCase()}`);
       setShowExportDialog(false);
     } catch (error) {
@@ -86,12 +111,42 @@ export function ExportButton({
 
     setIsExporting(true);
     try {
-      await exportContract(contract, {
+      const quickExportConfig = {
         format,
         includeMetadata: true,
         includeSignatures: true,
         includeApprovals: true,
+      };
+
+      const response = await fetch(`/api/contracts/${contract.id}/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(quickExportConfig),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Export failed');
+      }
+
+      // Get filename from Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || 
+        `contract.${format}`;
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
       toast.success(`Contract exported as ${format.toUpperCase()}`);
     } catch (error) {
       console.error('Export error:', error);
@@ -208,9 +263,9 @@ export function ExportButton({
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="metadata"
-                    checked={exportConfig.includeMetadata}
+                    checked={exportConfig.includeMetadata ?? false}
                     onCheckedChange={(checked) =>
-                      setExportConfig(prev => ({ ...prev, includeMetadata: !!checked }))
+                      setExportConfig(prev => ({ ...prev, includeMetadata: checked === true }))
                     }
                   />
                   <Label htmlFor="metadata" className="cursor-pointer">
@@ -224,9 +279,9 @@ export function ExportButton({
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="signatures"
-                    checked={exportConfig.includeSignatures}
+                    checked={exportConfig.includeSignatures ?? false}
                     onCheckedChange={(checked) =>
-                      setExportConfig(prev => ({ ...prev, includeSignatures: !!checked }))
+                      setExportConfig(prev => ({ ...prev, includeSignatures: checked === true }))
                     }
                   />
                   <Label htmlFor="signatures" className="cursor-pointer">
@@ -237,9 +292,9 @@ export function ExportButton({
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="approvals"
-                    checked={exportConfig.includeApprovals}
+                    checked={exportConfig.includeApprovals ?? false}
                     onCheckedChange={(checked) =>
-                      setExportConfig(prev => ({ ...prev, includeApprovals: !!checked }))
+                      setExportConfig(prev => ({ ...prev, includeApprovals: checked === true }))
                     }
                   />
                   <Label htmlFor="approvals" className="cursor-pointer">
@@ -250,9 +305,9 @@ export function ExportButton({
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="version-history"
-                    checked={exportConfig.includeVersionHistory}
+                    checked={exportConfig.includeVersionHistory ?? false}
                     onCheckedChange={(checked) =>
-                      setExportConfig(prev => ({ ...prev, includeVersionHistory: !!checked }))
+                      setExportConfig(prev => ({ ...prev, includeVersionHistory: checked === true }))
                     }
                     disabled={userTier === 'STARTER'}
                   />
@@ -293,19 +348,19 @@ export function ExportButton({
                   <Check className="h-3 w-3 text-green-500" />
                   Format: {exportConfig.format.toUpperCase()}
                 </div>
-                {exportConfig.includeMetadata && (
+                {(exportConfig.includeMetadata ?? false) && (
                   <div className="flex items-center gap-2">
                     <Check className="h-3 w-3 text-green-500" />
                     Includes metadata
                   </div>
                 )}
-                {exportConfig.includeSignatures && (
+                {(exportConfig.includeSignatures ?? false) && (
                   <div className="flex items-center gap-2">
                     <Check className="h-3 w-3 text-green-500" />
                     Includes signatures
                   </div>
                 )}
-                {exportConfig.includeApprovals && (
+                {(exportConfig.includeApprovals ?? false) && (
                   <div className="flex items-center gap-2">
                     <Check className="h-3 w-3 text-green-500" />
                     Includes approvals

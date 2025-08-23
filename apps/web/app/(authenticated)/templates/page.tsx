@@ -167,11 +167,11 @@ export default function TemplatesPage() {
       if (error) throw error
 
       // Copy template content to contract
-      if (template.content_json) {
+      if ((template as any).content_json) {
         await supabase.rpc('take_snapshot', {
           p_contract_id: contract.id,
-          p_content_json: template.content_json,
-          p_content_md: template.content_md,
+          p_content_json: (template as any).content_json,
+          p_content_md: (template as any).content_md,
           p_ydoc_state_base64: null
         })
       }

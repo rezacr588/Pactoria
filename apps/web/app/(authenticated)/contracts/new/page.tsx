@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   FileText,
   Sparkles,
-  Upload,
   Save,
   Eye,
   Wand2,
@@ -42,7 +41,8 @@ const templateCategories = [
 export default function NewContract() {
   const { user } = useAuth()
   const router = useRouter()
-  const { templates, isLoading: templatesLoading } = useTemplates()
+  const { data: templatesData, isLoading: templatesLoading } = useTemplates()
+  const templates = templatesData?.templates || []
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [activeTab, setActiveTab] = useState('manual')
@@ -77,10 +77,11 @@ export default function NewContract() {
 
     try {
       setGenerating(true)
-      const result = await apiClient.generateTemplate({
-        prompt: aiPrompt,
-        templateId: selectedTemplateId || undefined
-      })
+      const generateRequest: any = { prompt: aiPrompt };
+      if (selectedTemplateId) {
+        generateRequest.templateId = selectedTemplateId;
+      }
+      const result = await apiClient.generateTemplate(generateRequest)
       
       setGeneratedContent(result.result)
       setContent(result.result)

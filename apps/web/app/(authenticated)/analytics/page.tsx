@@ -10,12 +10,10 @@ import {
   Card,
   Title,
   Text,
-  Metric,
   BarChart,
   DonutChart,
   LineChart,
   Grid,
-  Col,
   Flex,
   Badge,
   ProgressBar,
@@ -27,7 +25,6 @@ import {
 } from '@tremor/react'
 import { 
   FileText, 
-  TrendingUp, 
   Clock, 
   CheckCircle,
   AlertTriangle,
@@ -82,7 +79,7 @@ export default function AnalyticsPage() {
   const monthlyData = monthlyTrend
   const riskData = riskDistribution
   const cycleTimeData = cycleTime
-  const contractsAnalyzed = contracts.filter(c => c.metadata?.risk_level).length
+  const contractsAnalyzed = contracts.filter(c => (c.metadata as any)?.risk_level).length
 
   return (
     <PageLayout>

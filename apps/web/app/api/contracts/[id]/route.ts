@@ -5,73 +5,73 @@ import {
   createSupabaseClient, 
   requireAuth, 
   successResponse, 
-  validateBody,
-  checkPermission,
-  Errors,
-  handleAPIError
+  errorResponse,
+  validateBody
 } from '@/lib/api/utils'
+import { updateContractSchema } from '@/lib/validations/schemas'
 
-// Validation schemas
-const updateContractSchema = z.object({
-  title: z.string().min(1).max(255).optional(),
-  status: z.enum(['draft', 'in_review', 'approved', 'rejected', 'signed']).optional(),
-  metadata: z.record(z.any()).optional(),
-})
+// Contract ID validation schema
+const contractIdSchema = z.string().uuid()
 
-const createSnapshotSchema = z.object({
-  content_json: z.any().optional(),
-  content_md: z.string().optional(),
-  ydoc_state: z.string().optional(), // Base64 encoded
-})
-
-export const GET = apiHandler(async (
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) => {
+export const GET = apiHandler(async (request: NextRequest, { params }: { params: { id: string } }) => {
   // Check authentication
-  const { userId, error: authError } = await requireAuth(request)
+  const { error: authError } = await requireAuth(request)
   if (authError) return authError
 
   const supabase = createSupabaseClient(request)
-  const contractId = params.id
   
-  // Validate UUID format
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  if (!uuidRegex.test(contractId)) {
-    return handleAPIError(Errors.BadRequest('Invalid contract ID format'))
+  // Validate contract ID
+  const validation = contractIdSchema.safeParse(params.id)
+  if (!validation.success) {
+    return errorResponse('Invalid contract ID format', 400)
   }
-  
-  // Use the optimized database function to get all related data in one call
-  const { data, error } = await supabase.rpc('get_contract_details', {
-    p_contract_id: contractId,
-    p_user_id: userId
-  })
-  
-  if (error) {
-    if (error.message?.includes('Access denied')) {
-      return handleAPIError(Errors.Forbidden('You do not have access to this contract'))
+
+  try {
+    // Get contract with versions and approvals
+    const { data: contract, error } = await supabase
+      .from('contracts')
+      .select(`
+        *,
+        contract_versions (
+          id,
+          version_number,
+          content_md,
+          content_json,
+          created_by,
+          created_at
+        ),
+        contract_approvals (
+          id,
+          version_id,
+          approver_id,
+          status,
+          comment,
+          created_at,
+          decided_at
+        )
+      `)
+      .eq('id', params.id)
+      .single()
+    
+    if (error) {
+      if (error.message.includes('Row not found')) {
+        return errorResponse('Contract not found', 404)
+      }
+      return errorResponse(error.message, 500)
     }
-    if (error.code === 'PGRST116') {
-      return handleAPIError(Errors.NotFound('Contract'))
-    }
-    return handleAPIError(error)
+
+    return successResponse({
+      contract,
+      versions: contract.contract_versions || [],
+      approvals: contract.contract_approvals || []
+    })
+  } catch (error: any) {
+    console.error('Error fetching contract:', error)
+    return errorResponse(error.message, 500)
   }
-  
-  // Parse the JSON response from the database function
-  const result = typeof data === 'string' ? JSON.parse(data) : data
-  
-  return successResponse({
-    contract: result.contract,
-    versions: result.versions || [],
-    approvals: result.approvals || [],
-    collaborators: result.collaborators || []
-  })
 })
 
-export const PATCH = apiHandler(async (
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) => {
+export const PATCH = apiHandler(async (request: NextRequest, { params }: { params: { id: string } }) => {
   // Check authentication
   const { userId, error: authError } = await requireAuth(request)
   if (authError) return authError
@@ -84,149 +84,118 @@ export const PATCH = apiHandler(async (
   if (validationError) return validationError
 
   const supabase = createSupabaseClient(request)
-  const contractId = params.id
   
-  // Check permission to update
-  const hasPermission = await checkPermission(
-    supabase,
-    userId!,
-    `contract:${contractId}`,
-    'update'
-  )
-  
-  if (!hasPermission) {
-    return handleAPIError(Errors.Forbidden('You cannot update this contract'))
+  // Validate contract ID
+  const validation = contractIdSchema.safeParse(params.id)
+  if (!validation.success) {
+    return errorResponse('Invalid contract ID format', 400)
   }
-  
-  // If status is being changed, validate the transition
-  if (body.status) {
-    // Get current status
-    const { data: current } = await supabase
+
+  try {
+    // Check if contract exists and user has permission to update
+    const { data: existingContract, error: fetchError } = await supabase
       .from('contracts')
-      .select('status')
-      .eq('id', contractId)
+      .select('id, owner_id')
+      .eq('id', params.id)
       .single()
     
-    if (current) {
-      const { data: isValid } = await supabase.rpc('validate_contract_status_transition', {
-        p_contract_id: contractId,
-        p_current_status: current.status,
-        p_new_status: body.status,
-        p_user_id: userId
-      })
-      
-      if (!isValid) {
-        return handleAPIError(
-          Errors.BadRequest(`Invalid status transition from ${current.status} to ${body.status}`)
-        )
+    if (fetchError || !existingContract) {
+      return errorResponse('Contract not found', 404)
+    }
+
+    if (existingContract.owner_id !== userId) {
+      return errorResponse('You cannot update this contract', 403)
+    }
+
+    // Build update object
+    const updates: any = {
+      updated_at: new Date().toISOString()
+    }
+
+    if (body!.title !== undefined) {
+      updates.title = body!.title
+    }
+
+    if (body!.status !== undefined) {
+      // Validate status
+      const validStatuses = ['draft', 'in_review', 'approved', 'rejected', 'signed']
+      if (!validStatuses.includes(body!.status)) {
+        return errorResponse('Invalid status value', 400)
       }
+      updates.status = body!.status
     }
+
+    if (body!.metadata !== undefined) {
+      updates.metadata = body!.metadata
+    }
+
+    // Check if there are any fields to update
+    if (Object.keys(updates).length === 1) { // Only updated_at
+      return errorResponse('No fields to update', 400)
+    }
+
+    // Update contract
+    const { data: updatedContract, error: updateError } = await supabase
+      .from('contracts')
+      .update(updates)
+      .eq('id', params.id)
+      .select('*')
+      .single()
+    
+    if (updateError) {
+      console.error('Error updating contract:', updateError)
+      return errorResponse(updateError.message, 400)
+    }
+
+    return successResponse({ contract: updatedContract })
+  } catch (error: any) {
+    console.error('Error updating contract:', error)
+    return errorResponse(error.message, 500)
   }
-  
-  // Prepare updates
-  const updates: any = {}
-  if (body.title) updates.title = body.title
-  if (body.status) updates.status = body.status
-  if (body.metadata) updates.metadata = body.metadata
-  
-  if (Object.keys(updates).length === 0) {
-    return handleAPIError(Errors.BadRequest('No fields to update'))
-  }
-  
-  // Update the contract
-  const { data, error } = await supabase
-    .from('contracts')
-    .update(updates)
-    .eq('id', contractId)
-    .select('*')
-    .single()
-  
-  if (error) {
-    return handleAPIError(error)
-  }
-  
-  return successResponse({ contract: data })
 })
 
-export const DELETE = apiHandler(async (
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) => {
+export const DELETE = apiHandler(async (request: NextRequest, { params }: { params: { id: string } }) => {
   // Check authentication
   const { userId, error: authError } = await requireAuth(request)
   if (authError) return authError
 
   const supabase = createSupabaseClient(request)
-  const contractId = params.id
   
-  // Check if user is the owner (only owners can delete)
-  const { data: contract } = await supabase
-    .from('contracts')
-    .select('owner_id')
-    .eq('id', contractId)
-    .single()
-  
-  if (!contract) {
-    return handleAPIError(Errors.NotFound('Contract'))
-  }
-  
-  if (contract.owner_id !== userId) {
-    return handleAPIError(Errors.Forbidden('Only the contract owner can delete it'))
-  }
-  
-  // Delete the contract (cascades to related records)
-  const { error } = await supabase
-    .from('contracts')
-    .delete()
-    .eq('id', contractId)
-  
-  if (error) {
-    return handleAPIError(error)
-  }
-  
-  return successResponse({ success: true, message: 'Contract deleted successfully' })
-})
-
-// POST endpoint for creating contract snapshots
-export const POST = apiHandler(async (
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) => {
-  // Check if this is a snapshot creation request
-  const url = new URL(request.url)
-  if (!url.pathname.endsWith('/snapshot')) {
-    return handleAPIError(Errors.NotFound('Endpoint'))
-  }
-  
-  // Check authentication
-  const { userId, error: authError } = await requireAuth(request)
-  if (authError) return authError
-
-  // Validate request body
-  const { data: body, error: validationError } = await validateBody(
-    request,
-    createSnapshotSchema
-  )
-  if (validationError) return validationError
-
-  const supabase = createSupabaseClient(request)
-  const contractId = params.id
-  
-  // Use the atomic database function to create snapshot
-  const { data, error } = await supabase.rpc('create_contract_snapshot', {
-    p_contract_id: contractId,
-    p_content_json: body.content_json || null,
-    p_content_md: body.content_md || null,
-    p_ydoc_state: body.ydoc_state ? Buffer.from(body.ydoc_state, 'base64') : null,
-    p_user_id: userId
-  })
-  
-  if (error) {
-    if (error.message?.includes('Access denied')) {
-      return handleAPIError(Errors.Forbidden('You do not have access to this contract'))
+  try {
+    // Check if contract exists and user has permission to delete
+    const { data: contract, error: fetchError } = await supabase
+      .from('contracts')
+      .select('id, owner_id')
+      .eq('id', params.id)
+      .single()
+    
+    if (fetchError || !contract) {
+      return errorResponse('Contract not found', 404)
     }
-    return handleAPIError(error)
+
+    if (contract.owner_id !== userId) {
+      return errorResponse('Only the contract owner can delete it', 403)
+    }
+
+    // Delete contract (cascade will handle related records)
+    const { error: deleteError } = await supabase
+      .from('contracts')
+      .delete()
+      .eq('id', params.id)
+    
+    if (deleteError) {
+      console.error('Error deleting contract:', deleteError)
+      return errorResponse(deleteError.message, 400)
+    }
+
+    return successResponse({ success: true })
+  } catch (error: any) {
+    console.error('Error deleting contract:', error)
+    return errorResponse(error.message, 500)
   }
-  
-  return successResponse({ version: data }, 201)
 })
+
+// Handle unsupported methods
+export const POST = () => {
+  return errorResponse('Method not allowed', 405)
+}

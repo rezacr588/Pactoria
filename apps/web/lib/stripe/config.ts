@@ -8,7 +8,7 @@ export const STRIPE_CONFIG = {
   webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
   
   // API versions
-  apiVersion: '2023-10-16' as const,
+  apiVersion: '2025-07-30.basil' as const,
   
   // Customer portal configuration
   customerPortalUrl: process.env.NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_URL,

@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
-import type { ContractApproval } from '@/lib/types'
+import type { ContractApproval } from '@/types'
 import { CheckCircle, XCircle, Clock, UserPlus, Send } from 'lucide-react'
 
 interface ApprovalsPanelProps {
@@ -31,11 +31,13 @@ export function ApprovalsPanel({ contractId, approvals }: ApprovalsPanelProps) {
   })
 
   const decisionMutation = useMutation({
-    mutationFn: (params: { approvalId: string; status: 'approved' | 'rejected'; comment?: string }) =>
-      apiClient.updateApprovalDecision(params.approvalId, {
-        status: params.status,
-        comment: params.comment,
-      }),
+    mutationFn: (params: { approvalId: string; status: 'approved' | 'rejected'; comment?: string }) => {
+      const request: any = { status: params.status };
+      if (params.comment) {
+        request.comment = params.comment;
+      }
+      return apiClient.updateApprovalDecision(params.approvalId, request);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contract', contractId] })
     },

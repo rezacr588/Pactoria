@@ -16,7 +16,7 @@ type Contract = {
   created_at: string
 }
 
-export const useContractStore = create<ContractStore>((set, get) => ({
+export const useContractStore = create<ContractStore>((set, _get) => ({
   contracts: [],
   setContracts: (contracts) => set({ contracts }),
   addContract: (contract) => set((state) => ({ contracts: [...state.contracts, contract] })),
