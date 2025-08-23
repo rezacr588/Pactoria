@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Contract Creation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 250px;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Contract Creation Test</h1>
+        
+        <div class="test-section">
+            <h2>1. Authentication</h2>
+            <input type="email" id="email" placeholder="Email" value="test@testmail.app">
+            <input type="password" id="password" placeholder="Password" value="TestPassword123!">
+            <br>
+            <button onclick="signUp()">Sign Up</button>
+            <button onclick="signIn()">Sign In</button>
+            <button onclick="getSession()">Get Session</button>
+            <button onclick="signOut()">Sign Out</button>
+            <div id="auth-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Contract Creation Tests</h2>
+            <input type="text" id="contract-title" placeholder="Contract Title" value="Test Contract">
+            <br>
+            <button onclick="createContractDirect()">Direct Insert (with owner_id)</button>
+            <button onclick="createContractWithoutOwner()">Direct Insert (without owner_id)</button>
+            <button onclick="createContractAPI()">Via API Endpoint</button>
+            <div id="contract-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Debug Info</h2>
+            <button onclick="checkRLS()">Check RLS</button>
+            <button onclick="listContracts()">List Contracts</button>
+            <div id="debug-info"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const SUPABASE_URL = 'https://efqljjmausicfkhjhhtl.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmcWxqam1hdXNpY2ZraGpoaHRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2MzgwMzIsImV4cCI6MjA3MTIxNDAzMn0.YgOQZI3LfkBv92grUt6ssao6yfdr1-mnh_xS1bkRTRo';
+        
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = null;
+        let currentSession = null;
+
+        // Helper function to display messages
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            element.innerHTML += `<div class="${className}">${new Date().toLocaleTimeString()}: ${message}</div>`;
+        }
+
+        // Authentication functions
+        async function signUp() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password
+                });
+                
+                if (error) throw error;
+                
+                if (data.user && !data.session) {
+                    log('auth-status', `Sign up successful! Check email for confirmation. User ID: ${data.user.id}`, 'success');
+                } else if (data.session) {
+                    currentUser = data.user;
+                    currentSession = data.session;
+                    log('auth-status', `Sign up successful! User ID: ${data.user.id}`, 'success');
+                }
+            } catch (error) {
+                log('auth-status', `Sign up error: ${error.message}`, 'error');
+            }
+        }
+
+        async function signIn() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                
+                if (error) throw error;
+                
+                currentUser = data.user;
+                currentSession = data.session;
+                log('auth-status', `Sign in successful! User ID: ${data.user.id}`, 'success');
+            } catch (error) {
+                log('auth-status', `Sign in error: ${error.message}`, 'error');
+            }
+        }
+
+        async function getSession() {
+            try {
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
+                
+                if (error) throw error;
+                
+                if (session) {
+                    currentSession = session;
+                    currentUser = session.user;
+                    log('auth-status', `Session found! User ID: ${session.user.id}`, 'success');
+                    console.log('Session:', session);
+                } else {
+                    log('auth-status', 'No active session', 'info');
+                }
+            } catch (error) {
+                log('auth-status', `Get session error: ${error.message}`, 'error');
+            }
+        }
+
+        async function signOut() {
+            try {
+                const { error } = await supabaseClient.auth.signOut();
+                if (error) throw error;
+                
+                currentUser = null;
+                currentSession = null;
+                log('auth-status', 'Signed out successfully', 'success');
+            } catch (error) {
+                log('auth-status', `Sign out error: ${error.message}`, 'error');
+            }
+        }
+
+        // Contract creation functions
+        async function createContractDirect() {
+            if (!currentUser) {
+                log('contract-status', 'Please sign in first', 'error');
+                return;
+            }
+
+            const title = document.getElementById('contract-title').value;
+            
+            try {
+                const { data, error } = await supabaseClient
+                    .from('contracts')
+                    .insert({
+                        title: title,
+                        owner_id: currentUser.id,
+                        status: 'draft',
+                        metadata: { test: true, created_via: 'test-page' }
+                    })
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                
+                log('contract-status', `Contract created! ID: ${data.id}`, 'success');
+                console.log('Created contract:', data);
+            } catch (error) {
+                log('contract-status', `Direct insert with owner_id error: ${error.message}`, 'error');
+                console.error('Error details:', error);
+            }
+        }
+
+        async function createContractWithoutOwner() {
+            if (!currentUser) {
+                log('contract-status', 'Please sign in first', 'error');
+                return;
+            }
+
+            const title = document.getElementById('contract-title').value;
+            
+            try {
+                // Try without explicitly setting owner_id
+                const { data, error } = await supabaseClient
+                    .from('contracts')
+                    .insert({
+                        title: title,
+                        status: 'draft',
+                        metadata: { test: true, created_via: 'test-page-no-owner' }
+                    })
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                
+                log('contract-status', `Contract created without owner_id! ID: ${data.id}`, 'success');
+                console.log('Created contract:', data);
+            } catch (error) {
+                log('contract-status', `Direct insert without owner_id error: ${error.message}`, 'error');
+                console.error('Error details:', error);
+            }
+        }
+
+        async function createContractAPI() {
+            if (!currentSession) {
+                log('contract-status', 'Please sign in first', 'error');
+                return;
+            }
+
+            const title = document.getElementById('contract-title').value;
+            
+            try {
+                const response = await fetch('/api/contracts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentSession.access_token}`
+                    },
+                    body: JSON.stringify({ title: title })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+                
+                log('contract-status', `API Contract created! ID: ${data.contract.id}`, 'success');
+                console.log('API created contract:', data.contract);
+            } catch (error) {
+                log('contract-status', `API create error: ${error.message}`, 'error');
+                console.error('API Error:', error);
+            }
+        }
+
+        // Debug functions
+        async function checkRLS() {
+            try {
+                // Try to get the current user's ID from auth context
+                const { data: { user }, error } = await supabaseClient.auth.getUser();
+                
+                if (error) throw error;
+                
+                if (user) {
+                    log('debug-info', `Current auth.uid(): ${user.id}`, 'info');
+                } else {
+                    log('debug-info', 'No authenticated user', 'error');
+                }
+            } catch (error) {
+                log('debug-info', `RLS check error: ${error.message}`, 'error');
+            }
+        }
+
+        async function listContracts() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('contracts')
+                    .select('*')
+                    .limit(5)
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                
+                log('debug-info', `Found ${data.length} contracts`, 'info');
+                console.log('Contracts:', data);
+                
+                if (data.length > 0) {
+                    const contractList = data.map(c => `${c.title} (${c.id})`).join(', ');
+                    log('debug-info', `Contracts: ${contractList}`, 'info');
+                }
+            } catch (error) {
+                log('debug-info', `List contracts error: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-check session on load
+        window.onload = () => {
+            getSession();
+        };
+    </script>
+</body>
+</html>

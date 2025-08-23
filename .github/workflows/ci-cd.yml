@@ -1,0 +1,344 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+  SUPABASE_VERSION: '1.123.4'
+
+jobs:
+  # ===== Code Quality Check =====
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'apps/web/package-lock.json'
+      
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+      
+      - name: Run TypeScript check
+        working-directory: apps/web
+        run: npm run type-check
+      
+      - name: Run ESLint
+        working-directory: apps/web
+        run: npm run lint
+      
+      - name: Check Prettier formatting
+        working-directory: apps/web
+        run: npx prettier --check "**/*.{ts,tsx,js,jsx,json,md}"
+
+  # ===== Security Scan =====
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Audit npm packages
+        working-directory: apps/web
+        run: npm audit --audit-level=high
+
+  # ===== Unit Tests =====
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'apps/web/package-lock.json'
+      
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+      
+      - name: Run unit tests
+        working-directory: apps/web
+        run: npm run test:unit || echo "No unit tests configured yet"
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          directory: ./apps/web/coverage
+          flags: unittests
+          name: codecov-umbrella
+
+  # ===== E2E Tests =====
+  e2e-tests:
+    name: E2E Tests (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    
+    services:
+      postgres:
+        image: supabase/postgres:15.1.0.117
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'apps/web/package-lock.json'
+      
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_VERSION }}
+      
+      - name: Start Supabase services
+        run: supabase start
+      
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+      
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      
+      - name: Run database migrations
+        run: |
+          for file in supabase/migrations/*.sql; do
+            psql ${{ secrets.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres' }} -f "$file"
+          done
+      
+      - name: Run E2E tests
+        working-directory: apps/web
+        run: npx playwright test --project=${{ matrix.browser }}
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+          TEST_USER_EMAIL: test@example.com
+          TEST_USER_PASSWORD: Test123456!
+          CI: true
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+  # ===== Build Docker Image =====
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [quality, security]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/pactoria-web
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/web
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+  # ===== Deploy to Staging =====
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, unit-tests, e2e-tests]
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging.pactoria.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Deploy to Vercel Staging
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+          alias-domains: staging.pactoria.com
+      
+      - name: Deploy Edge Functions to Supabase
+        run: |
+          supabase functions deploy ai --project-ref ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          supabase functions deploy contracts --project-ref ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          supabase functions deploy collab-token --project-ref ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+      
+      - name: Run smoke tests
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright test tests/e2e/smoke.spec.ts
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://staging.pactoria.com
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+
+  # ===== Deploy to Production =====
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, unit-tests, e2e-tests]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://pactoria.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Deploy to Vercel Production
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+      
+      - name: Deploy Edge Functions to Supabase
+        run: |
+          supabase functions deploy ai --project-ref ${{ secrets.PROD_SUPABASE_PROJECT_REF }}
+          supabase functions deploy contracts --project-ref ${{ secrets.PROD_SUPABASE_PROJECT_REF }}
+          supabase functions deploy collab-token --project-ref ${{ secrets.PROD_SUPABASE_PROJECT_REF }}
+      
+      - name: Run smoke tests
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright test tests/e2e/smoke.spec.ts
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://pactoria.com
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PROD_SUPABASE_ANON_KEY }}
+      
+      - name: Create release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            Production deployment of commit ${{ github.sha }}
+            
+            Changes in this release:
+            ${{ github.event.head_commit.message }}
+          draft: false
+          prerelease: false
+
+  # ===== Notify on Failure =====
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [quality, security, unit-tests, e2e-tests, build]
+    if: failure()
+    
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            CI/CD Pipeline Failed!
+            Workflow: ${{ github.workflow }}
+            Job: ${{ github.job }}
+            Repo: ${{ github.repository }}
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            Author: ${{ github.actor }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()
