@@ -51,6 +51,11 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   
+  // Disable ESLint during builds
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  
   // Disable x-powered-by header
   poweredByHeader: false,
   

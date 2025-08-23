@@ -9,16 +9,17 @@ import {
 
 export const GET = apiHandler(async (request: NextRequest) => {
   // Check authentication
-  const { error: authError } = await requireAuth(request)
+  const { userId, error: authError } = await requireAuth(request)
   if (authError) return authError
 
   const supabase = createSupabaseClient(request)
   
   try {
-    // Get contracts with RLS applied
+    // Get contracts for the authenticated user (RLS will handle the filtering)
     const { data: contracts, error } = await supabase
       .from('contracts')
       .select('status, created_at')
+      .eq('owner_id', userId)
       .order('created_at', { ascending: false })
     
     if (error) {

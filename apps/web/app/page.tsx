@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { generateHomeStructuredData } from './metadata'
 import { 
   ArrowRight, 
   Check, 
@@ -38,6 +39,9 @@ export default function Home() {
       router.push('/dashboard')
     }
   }, [user, router])
+
+  // Generate structured data
+  const structuredData = generateHomeStructuredData()
 
   const features = [
     {
@@ -147,7 +151,16 @@ export default function Home() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+    <>
+      {/* Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData),
+        }}
+      />
+      
+      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Navigation */}
       <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -211,7 +224,7 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8" itemScope itemType="https://schema.org/SoftwareApplication">
         <div className="max-w-7xl mx-auto">
           <div className="text-center">
             <Badge className="mb-4 bg-primary-50 text-primary-700 border border-primary-200">
@@ -219,13 +232,16 @@ export default function Home() {
               AI-Powered Contract Management
             </Badge>
             <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6">
-              Contracts Made
+              <span itemProp="headline">Contracts Made</span>
               <span className="bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent"> Simple</span>
             </h1>
-            <p className="text-xl text-slate-600 mb-8 max-w-3xl mx-auto">
+            <p className="text-xl text-slate-600 mb-8 max-w-3xl mx-auto" itemProp="description">
               Create, collaborate, and close deals faster with AI-powered contract management. 
               Join thousands of teams streamlining their legal workflows.
             </p>
+            <meta itemProp="name" content="Pactoria" />
+            <meta itemProp="applicationCategory" content="BusinessApplication" />
+            <meta itemProp="operatingSystem" content="Web Browser" />
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <Link href="/signup">
                 <Button size="lg" className="bg-primary-600 hover:bg-primary-700 text-white px-8">
@@ -307,11 +323,11 @@ export default function Home() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50">
+      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50" aria-labelledby="features-heading">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <Badge className="mb-4 bg-primary-50 text-primary-700 border-primary-200">Features</Badge>
-            <h2 className="text-4xl font-bold text-slate-900 mb-4">
+            <h2 id="features-heading" className="text-4xl font-bold text-slate-900 mb-4">
               Everything you need to manage contracts
             </h2>
             <p className="text-xl text-slate-600 max-w-3xl mx-auto">
@@ -334,11 +350,11 @@ export default function Home() {
       </section>
 
       {/* Testimonials Section */}
-      <section id="testimonials" className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+      <section id="testimonials" className="py-20 px-4 sm:px-6 lg:px-8 bg-white" aria-labelledby="testimonials-heading">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <Badge className="mb-4 bg-primary-50 text-primary-700 border-primary-200">Testimonials</Badge>
-            <h2 className="text-4xl font-bold text-slate-900 mb-4">
+            <h2 id="testimonials-heading" className="text-4xl font-bold text-slate-900 mb-4">
               Loved by legal teams worldwide
             </h2>
             <p className="text-xl text-slate-600 max-w-3xl mx-auto">
@@ -373,11 +389,11 @@ export default function Home() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50">
+      <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50" aria-labelledby="pricing-heading">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <Badge className="mb-4 bg-primary-50 text-primary-700 border-primary-200">Pricing</Badge>
-            <h2 className="text-4xl font-bold text-slate-900 mb-4">
+            <h2 id="pricing-heading" className="text-4xl font-bold text-slate-900 mb-4">
               Simple, transparent pricing
             </h2>
             <p className="text-xl text-slate-600 max-w-3xl mx-auto">
@@ -517,6 +533,7 @@ export default function Home() {
           </div>
         </div>
       </footer>
-    </div>
+      </main>
+    </>
   )
 }
