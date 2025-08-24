@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
-import type { Contract } from '@/types'
+import type { Contract, ContractWithRelations } from '@/types'
 import { Plus, FileText, Clock, CheckCircle, XCircle, Edit2, Trash2 } from 'lucide-react'
 
 export function ContractsList() {
@@ -24,12 +24,20 @@ export function ContractsList() {
       setNewTitle('')
       setShowCreateForm(false)
     },
+    onError: (error) => {
+      console.error('Failed to create contract:', error)
+      // You could add toast notification here
+    },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiClient.deleteContract(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] })
+    },
+    onError: (error) => {
+      console.error('Failed to delete contract:', error)
+      // You could add toast notification here
     },
   })
 
@@ -90,7 +98,7 @@ export function ContractsList() {
     )
   }
 
-  const contracts = data?.contracts || []
+  const contracts: ContractWithRelations[] = data?.contracts || []
 
   return (
     <div className="space-y-6">
@@ -215,6 +223,11 @@ export function ContractsList() {
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                     v{contract.latest_version_number || 0}
+                    {contract.contract_versions && contract.contract_versions.length > 0 && (
+                      <span className="ml-2 text-xs text-gray-400">
+                        ({contract.contract_versions.length} versions)
+                      </span>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                     {new Date(contract.updated_at).toLocaleDateString()}
@@ -234,11 +247,15 @@ export function ContractsList() {
                             deleteMutation.mutate(contract.id)
                           }
                         }}
-                        className="text-red-600 hover:text-red-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded p-1"
+                        className="text-red-600 hover:text-red-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded p-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-label={`Delete contract: ${contract.title}`}
                         disabled={deleteMutation.isPending}
                       >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        {deleteMutation.isPending ? (
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        )}
                       </button>
                     </div>
                   </td>

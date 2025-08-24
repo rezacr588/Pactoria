@@ -45,6 +45,12 @@ export interface ContractWithDetails extends Contract {
   priority: 'high' | 'medium' | 'low'
 }
 
+// Contract with related data from Prisma
+export interface ContractWithRelations extends Contract {
+  contract_versions?: ContractVersion[]
+  contract_approvals?: ContractApproval[]
+}
+
 export interface RecentActivity {
   id: string
   user: string

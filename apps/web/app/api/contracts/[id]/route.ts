@@ -2,23 +2,22 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { 
   apiHandler, 
-  createSupabaseClient, 
   requireAuth, 
   successResponse, 
   errorResponse,
   validateBody
 } from '@/lib/api/utils'
 import { updateContractSchema } from '@/lib/validations/schemas'
+import { db } from '@/lib/db'
+import { sanitizeApiInput } from '@/lib/security/input-sanitization'
 
 // Contract ID validation schema
 const contractIdSchema = z.string().uuid()
 
 export const GET = apiHandler(async (request: NextRequest, { params }: { params: { id: string } }) => {
   // Check authentication
-  const { error: authError } = await requireAuth(request)
+  const { userId, error: authError } = await requireAuth(request)
   if (authError) return authError
-
-  const supabase = createSupabaseClient(request)
   
   // Validate contract ID
   const validation = contractIdSchema.safeParse(params.id)
@@ -27,37 +26,28 @@ export const GET = apiHandler(async (request: NextRequest, { params }: { params:
   }
 
   try {
-    // Get contract with versions and approvals
-    const { data: contract, error } = await supabase
-      .from('contracts')
-      .select(`
-        *,
-        contract_versions (
-          id,
-          version_number,
-          content_md,
-          content_json,
-          created_by,
-          created_at
-        ),
-        contract_approvals (
-          id,
-          version_id,
-          approver_id,
-          status,
-          comment,
-          created_at,
-          decided_at
-        )
-      `)
-      .eq('id', params.id)
-      .single()
-    
-    if (error) {
-      if (error.message.includes('Row not found')) {
-        return errorResponse('Contract not found', 404)
+    // Get contract with versions and approvals using Prisma
+    const contract = await db.contracts.findFirst({
+      where: {
+        id: params.id,
+        owner_id: userId!
+      },
+      include: {
+        contract_versions: {
+          orderBy: {
+            version_number: 'desc'
+          }
+        },
+        contract_approvals: {
+          orderBy: {
+            created_at: 'desc'
+          }
+        }
       }
-      return errorResponse(error.message, 500)
+    })
+    
+    if (!contract) {
+      return errorResponse('Contract not found', 404)
     }
 
     return successResponse({
@@ -67,7 +57,7 @@ export const GET = apiHandler(async (request: NextRequest, { params }: { params:
     })
   } catch (error: any) {
     console.error('Error fetching contract:', error)
-    return errorResponse(error.message, 500)
+    return errorResponse('Failed to fetch contract', 500)
   }
 })
 
@@ -83,46 +73,50 @@ export const PATCH = apiHandler(async (request: NextRequest, { params }: { param
   )
   if (validationError) return validationError
 
-  const supabase = createSupabaseClient(request)
-  
   // Validate contract ID
   const validation = contractIdSchema.safeParse(params.id)
   if (!validation.success) {
     return errorResponse('Invalid contract ID format', 400)
   }
 
+  // Sanitize input
+  const sanitized: any = {}
+  if (body!.title) sanitized.title = sanitizeApiInput({ title: body!.title }, { title: { context: 'text', maxLength: 200 } }).title
+  if (body!.status) sanitized.status = sanitizeApiInput({ status: body!.status }, { status: { context: 'text', maxLength: 50 } }).status
+
   try {
     // Check if contract exists and user has permission to update
-    const { data: existingContract, error: fetchError } = await supabase
-      .from('contracts')
-      .select('id, owner_id')
-      .eq('id', params.id)
-      .single()
+    const existingContract = await db.contracts.findFirst({
+      where: {
+        id: params.id,
+        owner_id: userId!
+      },
+      select: {
+        id: true,
+        owner_id: true
+      }
+    })
     
-    if (fetchError || !existingContract) {
+    if (!existingContract) {
       return errorResponse('Contract not found', 404)
-    }
-
-    if (existingContract.owner_id !== userId) {
-      return errorResponse('You cannot update this contract', 403)
     }
 
     // Build update object
     const updates: any = {
-      updated_at: new Date().toISOString()
+      updated_at: new Date()
     }
 
-    if (body!.title !== undefined) {
-      updates.title = body!.title
+    if (sanitized.title) {
+      updates.title = sanitized.title
     }
 
-    if (body!.status !== undefined) {
+    if (sanitized.status) {
       // Validate status
       const validStatuses = ['draft', 'in_review', 'approved', 'rejected', 'signed']
-      if (!validStatuses.includes(body!.status)) {
+      if (!validStatuses.includes(sanitized.status)) {
         return errorResponse('Invalid status value', 400)
       }
-      updates.status = body!.status
+      updates.status = sanitized.status
     }
 
     if (body!.metadata !== undefined) {
@@ -134,23 +128,18 @@ export const PATCH = apiHandler(async (request: NextRequest, { params }: { param
       return errorResponse('No fields to update', 400)
     }
 
-    // Update contract
-    const { data: updatedContract, error: updateError } = await supabase
-      .from('contracts')
-      .update(updates)
-      .eq('id', params.id)
-      .select('*')
-      .single()
-    
-    if (updateError) {
-      console.error('Error updating contract:', updateError)
-      return errorResponse(updateError.message, 400)
-    }
+    // Update contract using Prisma
+    const updatedContract = await db.contracts.update({
+      where: {
+        id: params.id
+      },
+      data: updates
+    })
 
     return successResponse({ contract: updatedContract })
   } catch (error: any) {
     console.error('Error updating contract:', error)
-    return errorResponse(error.message, 500)
+    return errorResponse('Failed to update contract', 500)
   }
 })
 
@@ -158,40 +147,34 @@ export const DELETE = apiHandler(async (request: NextRequest, { params }: { para
   // Check authentication
   const { userId, error: authError } = await requireAuth(request)
   if (authError) return authError
-
-  const supabase = createSupabaseClient(request)
   
   try {
     // Check if contract exists and user has permission to delete
-    const { data: contract, error: fetchError } = await supabase
-      .from('contracts')
-      .select('id, owner_id')
-      .eq('id', params.id)
-      .single()
+    const contract = await db.contracts.findFirst({
+      where: {
+        id: params.id,
+        owner_id: userId!
+      },
+      select: {
+        id: true
+      }
+    })
     
-    if (fetchError || !contract) {
+    if (!contract) {
       return errorResponse('Contract not found', 404)
     }
 
-    if (contract.owner_id !== userId) {
-      return errorResponse('Only the contract owner can delete it', 403)
-    }
-
-    // Delete contract (cascade will handle related records)
-    const { error: deleteError } = await supabase
-      .from('contracts')
-      .delete()
-      .eq('id', params.id)
-    
-    if (deleteError) {
-      console.error('Error deleting contract:', deleteError)
-      return errorResponse(deleteError.message, 400)
-    }
+    // Delete contract using Prisma (cascade will handle related records)
+    await db.contracts.delete({
+      where: {
+        id: params.id
+      }
+    })
 
     return successResponse({ success: true })
   } catch (error: any) {
     console.error('Error deleting contract:', error)
-    return errorResponse(error.message, 500)
+    return errorResponse('Failed to delete contract', 500)
   }
 })
 
