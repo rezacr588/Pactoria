@@ -7,6 +7,7 @@ import {
   errorResponse,
   validateBody
 } from '@/lib/api/utils'
+import { sanitizeText, sanitizeUUID } from '@/lib/security/input-sanitization'
 
 // Environment validation
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -18,21 +19,21 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 const EDGE_FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`
 
-// Request validation schemas
-const generateTemplateSchema = z.object({
+// Request validation schemas  
+const baseGenerateTemplateSchema = z.object({
   action: z.literal('generateTemplate'),
   prompt: z.string().min(1).max(2000).optional(),
-  templateId: z.string().uuid().optional()
+  templateId: z.string().optional()
 })
 
-const analyzeRisksSchema = z.object({
+const baseAnalyzeRisksSchema = z.object({
   action: z.literal('analyzeRisks'),
-  text: z.string().min(1).max(10000)
+  text: z.string().min(1).max(50000)
 })
 
 const aiRequestSchema = z.discriminatedUnion('action', [
-  generateTemplateSchema,
-  analyzeRisksSchema
+  baseGenerateTemplateSchema,
+  baseAnalyzeRisksSchema
 ]).refine(data => {
   if (data.action === 'generateTemplate') {
     return data.prompt || data.templateId
@@ -54,6 +55,24 @@ export const POST = apiHandler(async (request: NextRequest) => {
   )
   if (validationError) return validationError
 
+  // Sanitize inputs based on action
+  let sanitizedPayload: any = {}
+  if (body!.action === 'generateTemplate') {
+    const sanitizedTemplateId = body!.templateId ? sanitizeUUID(body!.templateId) : undefined
+    sanitizedPayload = {
+      prompt: body!.prompt ? sanitizeText(body!.prompt, { maxLength: 2000 }) : undefined,
+      templateId: sanitizedTemplateId
+    }
+    // Validate templateId if provided
+    if (body!.templateId && !sanitizedTemplateId) {
+      return errorResponse('Invalid templateId format', 400)
+    }
+  } else if (body!.action === 'analyzeRisks') {
+    sanitizedPayload = {
+      text: sanitizeText(body!.text, { maxLength: 50000 })
+    }
+  }
+
   const authHeader = request.headers.get('Authorization')!
 
   try {
@@ -63,17 +82,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
     switch (body!.action) {
       case 'generateTemplate':
         endpoint = `${EDGE_FUNCTIONS_URL}/ai/generate-template`
-        payload = {
-          prompt: body!.prompt,
-          templateId: body!.templateId
-        }
+        payload = sanitizedPayload
         break
 
       case 'analyzeRisks':
         endpoint = `${EDGE_FUNCTIONS_URL}/ai/analyze-risks`
-        payload = {
-          text: body!.text
-        }
+        payload = sanitizedPayload
         break
 
       default:
@@ -129,7 +143,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const prompt = searchParams.get('prompt')
   
-  // Validate prompt parameter
+  // Validate and sanitize prompt parameter
   if (!prompt || prompt.length === 0) {
     return errorResponse('Prompt is required', 400)
   }
@@ -137,6 +151,8 @@ export async function GET(request: NextRequest) {
   if (prompt.length > 2000) {
     return errorResponse('Prompt too long (max 2000 characters)', 400)
   }
+  
+  const sanitizedPrompt = sanitizeText(prompt, { maxLength: 2000 })
 
   const authHeader = request.headers.get('Authorization')!
   const endpoint = `${EDGE_FUNCTIONS_URL}/ai/generate-template?stream=true`
@@ -153,7 +169,7 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_ANON_KEY!,
       },
-      body: JSON.stringify({ prompt: prompt.trim() }),
+      body: JSON.stringify({ prompt: sanitizedPrompt }),
       signal: controller.signal
     })
 

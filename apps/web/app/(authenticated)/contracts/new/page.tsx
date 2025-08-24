@@ -58,7 +58,7 @@ export default function NewContract() {
   
   // Load template content when a template is selected
   useEffect(() => {
-    if (selectedTemplateId && templates) {
+    if (selectedTemplateId && selectedTemplateId !== 'none' && templates) {
       const template = templates.find(t => t.id === selectedTemplateId)
       if (template) {
         setContent(template.content_md || '')
@@ -78,7 +78,7 @@ export default function NewContract() {
     try {
       setGenerating(true)
       const generateRequest: any = { prompt: aiPrompt };
-      if (selectedTemplateId) {
+      if (selectedTemplateId && selectedTemplateId !== 'none') {
         generateRequest.templateId = selectedTemplateId;
       }
       const result = await apiClient.generateTemplate(generateRequest)
@@ -316,7 +316,7 @@ export default function NewContract() {
                             <SelectValue placeholder="Select a template" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="none">None</SelectItem>
                             {templates
                               ?.filter(t => !selectedCategory || t.category === selectedCategory)
                               ?.filter(t => t.is_public)

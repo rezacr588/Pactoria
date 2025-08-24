@@ -5,6 +5,66 @@ import { Hono } from 'https://deno.land/x/hono@v3.12.0/mod.ts'
 import { cors } from 'https://deno.land/x/hono@v3.12.0/middleware/cors/index.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.4'
 
+// Import DOMPurify for Edge Function environment
+import createDOMPurify from 'https://esm.sh/isomorphic-dompurify@2.26.0'
+import validator from 'https://esm.sh/validator@13.15.15'
+
+const DOMPurify = createDOMPurify()
+
+// Input sanitization utilities
+function sanitizeText(input: string, maxLength = 10000): string {
+  if (!input || typeof input !== 'string') {
+    return ''
+  }
+  
+  // Remove HTML tags completely
+  let sanitized = DOMPurify.sanitize(input, { 
+    ALLOWED_TAGS: [], 
+    ALLOWED_ATTR: [], 
+    KEEP_CONTENT: true 
+  })
+  
+  // Trim whitespace
+  sanitized = sanitized.trim()
+  
+  // Truncate if needed
+  if (sanitized.length > maxLength) {
+    sanitized = sanitized.substring(0, maxLength).trim()
+  }
+  
+  return sanitized
+}
+
+function sanitizeContractText(input: string): string {
+  if (!input || typeof input !== 'string') {
+    return ''
+  }
+  
+  // Allow basic formatting for contract content but remove dangerous elements
+  const sanitized = DOMPurify.sanitize(input, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre'],
+    ALLOWED_ATTR: ['class'],
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
+    FORBID_ATTR: ['onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur', 'onsubmit', 'onchange'],
+  })
+  
+  return sanitized.trim().substring(0, 50000) // Limit to 50k chars
+}
+
+function sanitizeUUID(uuid: string): string | null {
+  if (!uuid || typeof uuid !== 'string') {
+    return null
+  }
+  
+  const cleaned = uuid.trim()
+  
+  if (!validator.isUUID(cleaned, 4)) {
+    return null
+  }
+  
+  return cleaned
+}
+
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -207,8 +267,16 @@ app.post('/generate-template', async (c) => {
     }
     
     // Sanitize inputs
-    const prompt = body.prompt?.substring(0, 2000) // Limit prompt length
-    const templateId = body.templateId?.replace(/[^a-zA-Z0-9-_]/g, '') // Sanitize template ID
+    const prompt = body.prompt ? sanitizeText(body.prompt, 2000) : undefined
+    const templateId = body.templateId ? sanitizeUUID(body.templateId) : undefined
+    
+    // Validate sanitized templateId if provided
+    if (body.templateId && !templateId) {
+      return c.json({ 
+        error: 'Invalid request',
+        details: 'templateId must be a valid UUID' 
+      }, 400)
+    }
     
     const sys = 'You are a helpful legal contract drafting assistant. Generate a concise, well-structured contract template in Markdown based on the user request. Ensure the content is professional and legally sound.'
     const user = prompt ?? `Generate a contract template for templateId=${templateId}`
@@ -249,8 +317,8 @@ app.post('/analyze-risks', async (c) => {
       }, 400)
     }
     
-    // Limit text length to prevent abuse
-    const text = body.text.substring(0, 10000) // 10k char limit
+    // Sanitize contract text input
+    const text = sanitizeContractText(body.text)
     
     const sys = 'You are a legal risk analysis assistant. Analyze the provided contract text and return a valid JSON object with exactly these fields: score (number between 0-1), flags (array of risk flag strings), suggestions (array of improvement suggestion strings). Ensure the response is valid JSON.'
     const user = `Analyze this contract text and return strict JSON only: ${text}`

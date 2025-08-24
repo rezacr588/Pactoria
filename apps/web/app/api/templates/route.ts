@@ -1,13 +1,14 @@
 import { NextRequest } from 'next/server'
 import { 
   apiHandler, 
-  createSupabaseClient, 
   requireAuth, 
   successResponse, 
   errorResponse,
   validateBody
 } from '@/lib/api/utils'
 import { z } from 'zod'
+import { db } from '@/lib/db'
+import { sanitizeApiInput } from '@/lib/security/input-sanitization'
 
 const createTemplateSchema = z.object({
   title: z.string().min(1).max(200),
@@ -22,55 +23,48 @@ const createTemplateSchema = z.object({
 })
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  // Templates are public - auth is optional
-  const supabase = createSupabaseClient(request)
   const { searchParams } = new URL(request.url)
   const category = searchParams.get('category')
   const featured = searchParams.get('featured') === 'true'
   const limit = parseInt(searchParams.get('limit') || '20')
   
   try {
-    let query = supabase
-      .from('templates')
-      .select(`
-        id,
-        title,
-        category,
-        description,
-        usage_count,
-        content_md,
-        tags,
-        is_public,
-        is_official,
-        created_by_user_id,
-        created_at,
-        updated_at
-      `)
-      .eq('is_public', true)
-      .order('usage_count', { ascending: false })
-      .limit(limit)
+    const whereConditions: any = {
+      is_public: true
+    }
 
     if (category && category !== 'all') {
-      query = query.eq('category', category)
+      whereConditions.category = category
     }
 
     if (featured) {
-      query = query.eq('is_official', true) // Use is_official as proxy for featured
+      whereConditions.is_official = true
     }
 
-    const { data: templates, error } = await query
-    
-    if (error) {
-      console.error('Error fetching templates:', error)
-      // Return empty array instead of error for missing columns
-      return successResponse({ 
-        templates: [],
-        categories: ['all', 'nda', 'service', 'employment', 'sales', 'partnership', 'licensing', 'other']
-      })
-    }
+    const templates = await db.templates.findMany({
+      where: whereConditions,
+      orderBy: {
+        usage_count: 'desc'
+      },
+      take: limit,
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        description: true,
+        usage_count: true,
+        content_md: true,
+        tags: true,
+        is_public: true,
+        is_official: true,
+        created_by_user_id: true,
+        created_at: true,
+        updated_at: true
+      }
+    })
 
     return successResponse({ 
-      templates: templates || [],
+      templates,
       categories: ['all', 'nda', 'service', 'employment', 'sales', 'partnership', 'licensing', 'other']
     })
   } catch (error) {
@@ -91,31 +85,28 @@ export const POST = apiHandler(async (request: NextRequest) => {
   )
   if (validationError) return validationError
 
-  const supabase = createSupabaseClient(request)
+  // Sanitize input
+  const sanitized = {
+    title: sanitizeApiInput({ title: body!.title }, { title: { context: 'text', maxLength: 200 } }).title,
+    description: body!.description ? sanitizeApiInput({ description: body!.description }, { description: { context: 'text', maxLength: 1000 } }).description : undefined,
+    content_md: sanitizeApiInput({ content_md: body!.content_md }, { content_md: { context: 'contract', maxLength: 50000 } }).content_md,
+    category: sanitizeApiInput({ category: body!.category }, { category: { context: 'text', maxLength: 50 } }).category
+  }
   
   try {
-    const templateData = {
-      title: body!.title,
-      description: body!.description,
-      category: body!.category,
-      content_md: body!.content_md,
-      tags: body!.tags || [],
-      is_public: body!.is_public ?? false,
-      is_official: false,
-      usage_count: 0,
-      created_by_user_id: user!.id
-    }
-
-    const { data: template, error } = await supabase
-      .from('templates')
-      .insert(templateData)
-      .select()
-      .single()
-    
-    if (error) {
-      console.error('Error creating template:', error)
-      return errorResponse('Failed to create template', 500)
-    }
+    const template = await db.templates.create({
+      data: {
+        title: sanitized.title,
+        description: sanitized.description || null,
+        category: sanitized.category as any,
+        content_md: sanitized.content_md,
+        tags: body!.tags || [],
+        is_public: body!.is_public ?? false,
+        is_official: false,
+        usage_count: 0,
+        created_by_user_id: user!.id
+      }
+    })
 
     return successResponse({ template })
   } catch (error) {
