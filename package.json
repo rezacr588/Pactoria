@@ -1,0 +1,19 @@
+{
+  "name": "pactoria-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "AI-powered contract management platform",
+  "scripts": {
+    "build": "cd apps/web && npm run build",
+    "dev": "cd apps/web && npm run dev",
+    "start": "cd apps/web && npm start",
+    "install-web": "cd apps/web && npm install",
+    "build-web": "cd apps/web && npm run build"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
