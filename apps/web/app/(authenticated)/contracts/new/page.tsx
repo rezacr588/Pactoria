@@ -6,6 +6,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import contractsService from '@/lib/services/contracts'
 import apiClient from '@/lib/api-client'
 import { useTemplates } from '@/hooks/useTemplates'
+import LiveCollaborativeEditor from '@/components/editor/LiveCollaborativeEditor'
+import PresenceAvatars from '@/components/editor/PresenceAvatars'
+import { ShareContractDialog } from '@/components/contracts/ShareContractDialog'
 import { 
   ArrowLeft,
   FileText,
@@ -15,7 +18,9 @@ import {
   Wand2,
   AlertCircle,
   CheckCircle,
-  Loader2
+  Loader2,
+  Share2,
+  Users
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +60,12 @@ export default function NewContract() {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
   const [generatedContent, setGeneratedContent] = useState('')
+  
+  // Collaboration state
+  const [contractId, setContractId] = useState<string | null>(null)
+  const [activeCollaborators, setActiveCollaborators] = useState(0)
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [isCollaborationEnabled, setIsCollaborationEnabled] = useState(false)
   
   // Load template content when a template is selected
   useEffect(() => {

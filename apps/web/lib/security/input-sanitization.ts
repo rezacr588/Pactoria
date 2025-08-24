@@ -8,20 +8,36 @@ function getDOMPurify() {
     try {
       const createDOMPurify = require('isomorphic-dompurify')
       DOMPurify = createDOMPurify()
-    } catch (error) {
-      console.error('Failed to initialize DOMPurify:', error)
+      
+      // Verify the instance was created properly
+      if (!DOMPurify || typeof DOMPurify.sanitize !== 'function') {
+        throw new Error('DOMPurify instance is invalid')
+      }
+    } catch (error: any) {
+      console.warn('Failed to initialize DOMPurify, using fallback:', error?.message || 'Unknown error')
       // Fallback: create a mock DOMPurify with basic HTML stripping
       DOMPurify = {
         sanitize: (input: string, config?: any) => {
-          if (!input) return input
+          if (!input || typeof input !== 'string') return input || ''
+          
           // Basic HTML tag removal as fallback
           let cleaned = input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
           cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
           cleaned = cleaned.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+          
           if (config?.ALLOWED_TAGS && config.ALLOWED_TAGS.length === 0) {
             // If no tags allowed, strip all HTML
             cleaned = cleaned.replace(/<[^>]*>/g, '')
+          } else if (config?.ALLOWED_TAGS && Array.isArray(config.ALLOWED_TAGS)) {
+            // More sophisticated tag filtering if specific tags are allowed
+            const allowedPattern = config.ALLOWED_TAGS.map((tag: string) => 
+              `</?${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^>]*>`
+            ).join('|')
+            if (allowedPattern) {
+              cleaned = cleaned.replace(new RegExp(`<(?!/?(?:${config.ALLOWED_TAGS.join('|')})[^>]*>)[^>]*>`, 'gi'), '')
+            }
           }
+          
           return cleaned
         }
       }
@@ -104,7 +120,8 @@ export function sanitizeText(input: string, options: SanitizationOptions = {}): 
   const { maxLength = 10000 } = options
 
   // Remove HTML tags completely
-  let sanitized = DOMPurify.sanitize(input, CONFIG.TEXT)
+  const domPurify = getDOMPurify()
+  let sanitized = domPurify.sanitize(input, CONFIG.TEXT)
   
   // Trim whitespace
   sanitized = sanitized.trim()
