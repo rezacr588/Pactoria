@@ -100,6 +100,11 @@ export default function NewContract() {
       
       // Switch to manual tab to show the generated content
       setActiveTab('manual')
+      
+      // If collaboration is enabled, the content will sync automatically
+      if (isCollaborationEnabled && contractId) {
+        toast.success('Generated content synced to collaborative editor!')
+      }
     } catch (error) {
       console.error('Error generating contract:', error)
       toast.error('Failed to generate contract')
@@ -135,6 +140,11 @@ export default function NewContract() {
       setContent(fullContent)
       toast.success('Contract generated successfully!')
       setActiveTab('manual')
+      
+      // If collaboration is enabled, the content will sync automatically
+      if (isCollaborationEnabled && contractId) {
+        toast.success('Generated content synced to collaborative editor!')
+      }
     } catch (error) {
       console.error('Error streaming contract:', error)
       toast.error('Failed to generate contract')
@@ -169,22 +179,73 @@ export default function NewContract() {
   }
 
   const handleSaveDraft = async () => {
-    if (!title.trim()) {
-      toast.error('Please enter a contract title')
-      return
-    }
-
+    // Allow saving even without a title by providing a default
     try {
       setLoading(true)
+      
+      // Use default title if none provided
+      const contractTitle = title.trim() || `Service Agreement - ${new Date().toLocaleDateString()}`
+      
       const contract = await contractsService.createContract({
-        title,
+        title: contractTitle,
         description,
         content,
         status: 'draft'
       })
       
-      toast.success('Draft saved successfully!')
-      router.push(`/contracts/${contract.id}`)
+      // Update the title state with the final title
+      setTitle(contractTitle)
+      
+      // Enable collaboration for the newly created draft
+      setContractId(contract.id)
+      setIsCollaborationEnabled(true)
+      
+      // If no content exists, set a default template for collaboration
+      if (!content.trim()) {
+        const defaultTemplate = `# Service Agreement
+
+**Agreement Date:** [Date]  
+**Parties:**
+- **Client:** [Client Name]  
+- **Service Provider:** [Your Company Name]
+
+## 1. Services
+The Service Provider agrees to provide the following services:
+- [Describe the services to be provided]
+- [Additional service details]
+
+## 2. Timeline
+- **Start Date:** [Start Date]
+- **Completion Date:** [End Date]
+- **Milestones:** [Key milestones and deliverables]
+
+## 3. Payment Terms
+- **Total Amount:** $[Amount]
+- **Payment Schedule:** [Payment schedule details]
+- **Late Payment:** [Late payment terms]
+
+## 4. Responsibilities
+**Client Responsibilities:**
+- [List client responsibilities]
+
+**Service Provider Responsibilities:**
+- [List service provider responsibilities]
+
+## 5. Termination
+This agreement may be terminated by either party with [notice period] written notice.
+
+## 6. Governing Law
+This agreement shall be governed by the laws of [State/Country].
+
+---
+**Signatures**
+- **Client:** _________________________ Date: _______
+- **Service Provider:** _________________________ Date: _______`
+        
+        setContent(defaultTemplate)
+      }
+      
+      toast.success('Draft saved successfully! Live collaboration is now enabled.')
     } catch (error) {
       console.error('Error saving draft:', error)
       toast.error('Failed to save draft')
@@ -216,6 +277,32 @@ export default function NewContract() {
               <h1 className="text-xl font-semibold">Create New Contract</h1>
             </div>
             <div className="flex items-center space-x-3">
+              {/* Collaboration Features */}
+              {isCollaborationEnabled && contractId && (
+                <>
+                  <div className="flex items-center space-x-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+                    <Users className="h-4 w-4 text-green-600" />
+                    <span className="text-sm text-green-700 font-medium">
+                      {activeCollaborators} online
+                    </span>
+                  </div>
+                  <PresenceAvatars
+                    contractId={contractId}
+                    maxVisible={3}
+                    onActiveUsersChange={setActiveCollaborators}
+                    className="flex items-center"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowShareDialog(true)}
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share
+                  </Button>
+                </>
+              )}
+              
               <Button variant="outline" disabled={loading}>
                 <Eye className="h-4 w-4 mr-2" />
                 Preview
@@ -289,14 +376,33 @@ export default function NewContract() {
                     <TabsContent value="manual" className="space-y-4">
                       <div>
                         <Label htmlFor="content">Contract Content</Label>
-                        <Textarea
-                          id="content"
-                          placeholder="Enter your contract content here..."
-                          rows={20}
-                          value={content}
-                          onChange={(e) => setContent(e.target.value)}
-                          className="font-mono text-sm"
-                        />
+                        {isCollaborationEnabled && contractId ? (
+                          <div className="border rounded-lg">
+                            <LiveCollaborativeEditor
+                              contractId={contractId}
+                              initialContent={content}
+                              onSave={async (content: any) => {
+                                // Handle content save - you can update the state here if needed
+                                console.log('Content saved:', content)
+                              }}
+                              className="min-h-[400px]"
+                            />
+                          </div>
+                        ) : (
+                          <Textarea
+                            id="content"
+                            placeholder="Enter your contract content here... (Save as draft to enable live collaboration)"
+                            rows={20}
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            className="font-mono text-sm"
+                          />
+                        )}
+                        {!isCollaborationEnabled && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            💡 Save as draft to enable live collaboration with others
+                          </p>
+                        )}
                       </div>
                     </TabsContent>
 
@@ -416,6 +522,75 @@ export default function NewContract() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Collaboration Status Card */}
+            {isCollaborationEnabled && contractId ? (
+              <Card className="border-green-200 bg-green-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-green-800">
+                    <Users className="h-5 w-5 mr-2" />
+                    Live Collaboration
+                  </CardTitle>
+                  <CardDescription className="text-green-700">
+                    Real-time editing is now active
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-green-700">Active users:</span>
+                      <span className="font-medium text-green-800">{activeCollaborators}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setShowShareDialog(true)}
+                    >
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Invite Collaborators
+                    </Button>
+                    <p className="text-xs text-green-600">
+                      Changes are automatically synced across all users
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-amber-200 bg-amber-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-amber-800">
+                    <AlertCircle className="h-5 w-5 mr-2" />
+                    Enable Collaboration
+                  </CardTitle>
+                  <CardDescription className="text-amber-700">
+                    Save as draft to start collaborating
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <p className="text-sm text-amber-700">
+                      Once you save as draft, you can:
+                    </p>
+                    <ul className="text-xs text-amber-600 space-y-1">
+                      <li>• See who's editing in real-time</li>
+                      <li>• Share with collaborators</li>
+                      <li>• Work together simultaneously</li>
+                    </ul>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={handleSaveDraft}
+                      disabled={loading}
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Draft & Enable
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Tips Card */}
             <Card>
               <CardHeader>
@@ -509,6 +684,16 @@ export default function NewContract() {
           </div>
         </div>
       </div>
+
+      {/* Share Dialog */}
+      {contractId && (
+        <ShareContractDialog
+          contractId={contractId}
+          contractTitle={title || 'New Contract'}
+          isOpen={showShareDialog}
+          onClose={() => setShowShareDialog(false)}
+        />
+      )}
     </div>
   )
 }
