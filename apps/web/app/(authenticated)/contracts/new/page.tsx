@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import contractsService from '@/lib/services/contracts'
 import apiClient from '@/lib/api-client'
 import { useTemplates } from '@/hooks/useTemplates'
-import LiveCollaborativeEditor from '@/components/editor/LiveCollaborativeEditor'
+import EnhancedLiveCollaborativeEditor from '@/components/editor/EnhancedLiveCollaborativeEditor'
 import PresenceAvatars from '@/components/editor/PresenceAvatars'
 import { ShareContractDialog } from '@/components/contracts/ShareContractDialog'
 import { 
@@ -377,15 +377,18 @@ This agreement shall be governed by the laws of [State/Country].
                       <div>
                         <Label htmlFor="content">Contract Content</Label>
                         {isCollaborationEnabled && contractId ? (
-                          <div className="border rounded-lg">
-                            <LiveCollaborativeEditor
+                          <div>
+                            <EnhancedLiveCollaborativeEditor
                               contractId={contractId}
                               initialContent={content}
                               onSave={async (content: any) => {
-                                // Handle content save - you can update the state here if needed
+                                // Handle content save - update state with new content
+                                setContent(typeof content === 'string' ? content : JSON.stringify(content))
                                 console.log('Content saved:', content)
                               }}
                               className="min-h-[400px]"
+                              enableAIGeneration={true}
+                              enableRealTimeValidation={true}
                             />
                           </div>
                         ) : (
