@@ -112,10 +112,21 @@ model Template {
   description           String?
   category              String    @default("general")
   contentMd             String    @map("content_md")
+  contentJson           Json?     @map("content_json")
+  thumbnailUrl          String?   @map("thumbnail_url")
   tags                  String[]  @default([])
   isPublic              Boolean   @default(true) @map("is_public")
   isOfficial            Boolean   @default(false) @map("is_official")
+  isFeatured            Boolean   @default(false) @map("is_featured")
+  published             Boolean   @default(false)
   usageCount            Int       @default(0) @map("usage_count")
+  rating                Float     @default(0.0)
+  reviewsCount          Int       @default(0) @map("reviews_count")
+  price                 Float     @default(0.0)
+  currency              String    @default("USD")
+  tierRequired          String    @default("free") @map("tier_required")
+  variables             Json      @default("[]")
+  createdBy             String?   @map("created_by") @db.Uuid
   createdByUserId       String?   @map("created_by_user_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
@@ -123,6 +134,8 @@ model Template {
   @@map("templates")
   @@index([category], name: "idx_templates_category")
   @@index([isPublic], name: "idx_templates_public")
+  @@index([isFeatured], name: "idx_templates_featured")
+  @@index([createdBy], name: "idx_templates_created_by")
   @@index([createdByUserId], name: "idx_templates_creator")
 }
 

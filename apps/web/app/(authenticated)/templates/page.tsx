@@ -18,15 +18,19 @@ import { toast } from 'sonner'
 interface Template {
   id: string
   title: string
-  description: string
+  description?: string
   category: string
-  tags: string[]
-  is_featured: boolean
-  usage_count: number
-  rating: number
-  price: number
-  created_by: string
+  tags?: string[]
+  is_featured?: boolean
+  usage_count?: number
+  rating?: number
+  reviews_count?: number
+  price?: number
+  created_by?: string
   created_at: string
+  content_md?: string
+  content_json?: any
+  variables?: any[]
   creator?: {
     email: string
     name?: string
@@ -66,37 +70,52 @@ export default function TemplatesPage() {
   const fetchTemplates = async () => {
     setLoading(true)
     try {
-      let query = supabase
-        .from('templates')
-        .select(`
-          *,
-          creator:created_by (
-            email,
-            raw_user_meta_data->name
-          )
-        `)
-
       if (activeTab === 'my-templates' && user) {
-        query = query.eq('created_by', user.id)
+        // Fetch user's own templates
+        const { data, error } = await supabase
+          .from('templates')
+          .select('*')
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false })
+        
+        if (error) throw error
+        setTemplates(data || [])
       } else if (activeTab === 'saved' && user) {
-        const { data: savedTemplates } = await supabase
-          .from('user_templates')
-          .select('template_id')
-          .eq('user_id', user.id)
-
-        const templateIds = savedTemplates?.map(st => st.template_id) || []
-        query = query.in('id', templateIds)
+        // Fetch saved templates (simplified - just show public ones for now)
+        const { data, error } = await supabase
+          .from('templates')
+          .select('*')
+          .eq('is_public', true)
+          .eq('published', true)
+          .limit(10)
+          .order('usage_count', { ascending: false })
+        
+        if (error) throw error
+        setTemplates(data || [])
       } else {
-        query = query.eq('is_public', true)
+        // Fetch public templates using API
+        try {
+          const response = await fetch('/api/templates')
+          const result = await response.json()
+          setTemplates(result.templates || [])
+        } catch (apiError) {
+          // Fallback to direct Supabase query
+          const { data, error } = await supabase
+            .from('templates')
+            .select('*')
+            .eq('is_public', true)
+            .eq('published', true)
+            .order('usage_count', { ascending: false })
+            .limit(20)
+          
+          if (error) throw error
+          setTemplates(data || [])
+        }
       }
-
-      const { data, error } = await query
-
-      if (error) throw error
-      setTemplates(data || [])
     } catch (error) {
       console.error('Error fetching templates:', error)
       toast.error('Failed to load templates')
+      setTemplates([]) // Set empty array on error
     } finally {
       setLoading(false)
     }
@@ -123,19 +142,19 @@ export default function TemplatesPage() {
     // Sort templates
     switch (sortBy) {
       case 'popular':
-        filtered.sort((a, b) => b.usage_count - a.usage_count)
+        filtered.sort((a, b) => (b.usage_count || 0) - (a.usage_count || 0))
         break
       case 'rating':
-        filtered.sort((a, b) => b.rating - a.rating)
+        filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0))
         break
       case 'newest':
         filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         break
       case 'price-low':
-        filtered.sort((a, b) => a.price - b.price)
+        filtered.sort((a, b) => (a.price || 0) - (b.price || 0))
         break
       case 'price-high':
-        filtered.sort((a, b) => b.price - a.price)
+        filtered.sort((a, b) => (b.price || 0) - (a.price || 0))
         break
     }
 
@@ -150,8 +169,19 @@ export default function TemplatesPage() {
     }
 
     try {
-      // Increment usage count
-      await supabase.rpc('increment_template_usage', { template_id: template.id })
+      // Increment usage count if function exists
+      try {
+        await supabase.rpc('increment_template_usage', { template_id: template.id })
+      } catch (rpcError) {
+        // Function might not exist yet, just log and continue
+        console.warn('increment_template_usage function not found:', rpcError)
+        
+        // Manual increment as fallback
+        await supabase
+          .from('templates')
+          .update({ usage_count: (template.usage_count || 0) + 1 })
+          .eq('id', template.id)
+      }
 
       // Create new contract from template
       const { data: contract, error } = await supabase
@@ -166,14 +196,29 @@ export default function TemplatesPage() {
 
       if (error) throw error
 
-      // Copy template content to contract
-      if ((template as any).content_json) {
-        await supabase.rpc('take_snapshot', {
-          p_contract_id: contract.id,
-          p_content_json: (template as any).content_json,
-          p_content_md: (template as any).content_md,
-          p_ydoc_state_base64: null
-        })
+      // Copy template content to contract if available
+      if (template.content_md || template.content_json) {
+        try {
+          await supabase.rpc('take_snapshot', {
+            p_contract_id: contract.id,
+            p_content_json: template.content_json || null,
+            p_content_md: template.content_md || null,
+            p_ydoc_state_base64: null
+          })
+        } catch (snapshotError) {
+          console.warn('take_snapshot RPC failed, creating version directly:', snapshotError)
+          
+          // Fallback: create version directly
+          await supabase
+            .from('contract_versions')
+            .insert({
+              contract_id: contract.id,
+              version_number: 1,
+              content_md: template.content_md || `# ${template.title}\n\nTemplate content will be loaded here.`,
+              content_json: template.content_json,
+              created_by: user.id
+            })
+        }
       }
 
       toast.success('Contract created from template')
@@ -214,7 +259,7 @@ export default function TemplatesPage() {
     }
   }
 
-  const renderStars = (rating: number) => {
+  const renderStars = (rating: number = 0) => {
     return Array.from({ length: 5 }, (_, i) => (
       <Star
         key={i}
@@ -246,7 +291,7 @@ export default function TemplatesPage() {
       <CardContent>
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <Badge variant="outline">{categories.find(c => c.value === template.category)?.label}</Badge>
+            <Badge variant="outline">{categories.find(c => c.value === template.category)?.label || template.category}</Badge>
             {template.tags?.slice(0, 2).map(tag => (
               <Badge key={tag} variant="secondary" className="text-xs">
                 {tag}
@@ -256,17 +301,17 @@ export default function TemplatesPage() {
           
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <div className="flex items-center gap-1">
-              {renderStars(template.rating)}
-              <span className="ml-1">({template.rating.toFixed(1)})</span>
+              {renderStars(template.rating || 0)}
+              <span className="ml-1">({(template.rating || 0).toFixed(1)})</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <Download className="h-3 w-3" />
-                {template.usage_count}
+                {template.usage_count || 0}
               </span>
-              {template.price > 0 && (
+              {(template.price || 0) > 0 && (
                 <span className="font-semibold text-foreground">
-                  ${template.price.toFixed(2)}
+                  ${(template.price || 0).toFixed(2)}
                 </span>
               )}
             </div>
