@@ -4,7 +4,7 @@ import React, { useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
-import CollaborativeEditor from '@/components/editor/CollaborativeEditor'
+import LiveCollaborativeEditor from '@/components/editor/LiveCollaborativeEditor'
 import PresenceAvatars from '@/components/editor/PresenceAvatars'
 import VersionTimeline from '@/components/versions/VersionTimeline'
 import ApprovalsPanel from '@/components/approvals/ApprovalsPanel'
@@ -249,7 +249,7 @@ export default function ContractDetailPage() {
                 </TabsList>
 
                 <TabsContent value="editor" className="space-y-4">
-                  <CollaborativeEditor
+                  <LiveCollaborativeEditor
                     contractId={contractId}
                     initialContent={latestVersion?.content_json}
                     onSave={handleSaveSnapshot}
