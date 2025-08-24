@@ -91,3 +91,8 @@ generated/
 *.zip
 *.tar.gz
 /apps/web/quick-deploy.md
+add-env.sh
+
+# Files containing secrets (should use templates instead)
+**/add-env.sh
+**/quick-deploy.md

@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Add environment variables to Vercel
+# Copy this file to add-env.sh and set your actual values
+
+echo "Adding environment variables to Vercel..."
+
+# Set your actual values here or in environment variables
+NEXT_PUBLIC_SUPABASE_URL="your_supabase_url_here"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your_supabase_anon_key_here"
+DATABASE_URL="your_database_url_here"
+GROQ_API_KEY="your_groq_api_key_here"
+
+# Add environment variables to Vercel
+echo "$NEXT_PUBLIC_SUPABASE_URL" | npx vercel env add NEXT_PUBLIC_SUPABASE_URL production
+echo "$NEXT_PUBLIC_SUPABASE_ANON_KEY" | npx vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
+echo "$DATABASE_URL" | npx vercel env add DATABASE_URL production
+echo "$GROQ_API_KEY" | npx vercel env add GROQ_API_KEY production
+
+echo "Environment variables added successfully!"
