@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server'
 import { 
   apiHandler, 
-  createSupabaseClient, 
   requireAuth, 
   successResponse, 
   errorResponse 
 } from '@/lib/api/utils'
+import { db } from '@/lib/db'
 
 function calculateProgress(status: string): number {
   const progressMap: Record<string, number> = {
@@ -20,38 +20,40 @@ function calculateProgress(status: string): number {
 
 export const GET = apiHandler(async (request: NextRequest) => {
   // Check authentication
-  const { error: authError } = await requireAuth(request)
+  const { user, error: authError } = await requireAuth(request)
   if (authError) return authError
-
-  const supabase = createSupabaseClient(request)
+  
   const { searchParams } = new URL(request.url)
   const limit = parseInt(searchParams.get('limit') || '5')
   
   try {
-    // Get recent contracts with related data
-    const { data: contracts, error } = await supabase
-      .from('contracts')
-      .select(`
-        *,
-        contract_parties (
-          party_name,
-          party_email
-        ),
-        contract_metadata (
-          key,
-          value
-        )
-      `)
-      .order('updated_at', { ascending: false })
-      .limit(limit)
-    
-    if (error) {
-      console.error('Error fetching recent contracts:', error)
-      return errorResponse(error.message, 400)
-    }
+    // Get recent contracts with related data using Prisma
+    const contracts = await db.contracts.findMany({
+      where: {
+        owner_id: user.id
+      },
+      include: {
+        contract_parties: {
+          select: {
+            party_name: true,
+            party_email: true
+          }
+        },
+        contract_metadata: {
+          select: {
+            key: true,
+            value: true
+          }
+        }
+      },
+      orderBy: {
+        updated_at: 'desc'
+      },
+      take: limit
+    })
 
     // Transform contracts to include computed fields
-    const contractsWithDetails = (contracts || []).map((contract: any) => {
+    const contractsWithDetails = contracts.map((contract: any) => {
       // Extract metadata values
       const metadataMap = contract.contract_metadata?.reduce((acc: any, meta: any) => {
         acc[meta.key] = meta.value

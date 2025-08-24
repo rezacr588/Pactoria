@@ -325,9 +325,9 @@ export default function NewContract() {
                                   <div className="flex items-center justify-between w-full">
                                     <span>{template.title}</span>
                                     <div className="flex items-center space-x-1">
-                                      {template.is_official && (
+                                      {template.is_featured && (
                                         <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
-                                          Official
+                                          Featured
                                         </span>
                                       )}
                                       <span className="text-xs text-gray-500">
