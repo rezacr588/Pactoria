@@ -55,22 +55,27 @@ export const POST = apiHandler(async (request: NextRequest) => {
   )
   if (validationError) return validationError
 
-  // Sanitize inputs based on action
+  // Sanitize inputs based on action with error handling
   let sanitizedPayload: any = {}
-  if (body!.action === 'generateTemplate') {
-    const sanitizedTemplateId = body!.templateId ? sanitizeUUID(body!.templateId) : undefined
-    sanitizedPayload = {
-      prompt: body!.prompt ? sanitizeText(body!.prompt, { maxLength: 2000 }) : undefined,
-      templateId: sanitizedTemplateId
+  try {
+    if (body!.action === 'generateTemplate') {
+      const sanitizedTemplateId = body!.templateId ? sanitizeUUID(body!.templateId) : undefined
+      sanitizedPayload = {
+        prompt: body!.prompt ? sanitizeText(body!.prompt, { maxLength: 2000 }) : undefined,
+        templateId: sanitizedTemplateId
+      }
+      // Validate templateId if provided
+      if (body!.templateId && !sanitizedTemplateId) {
+        return errorResponse('Invalid templateId format', 400)
+      }
+    } else if (body!.action === 'analyzeRisks') {
+      sanitizedPayload = {
+        text: sanitizeText(body!.text, { maxLength: 50000 })
+      }
     }
-    // Validate templateId if provided
-    if (body!.templateId && !sanitizedTemplateId) {
-      return errorResponse('Invalid templateId format', 400)
-    }
-  } else if (body!.action === 'analyzeRisks') {
-    sanitizedPayload = {
-      text: sanitizeText(body!.text, { maxLength: 50000 })
-    }
+  } catch (sanitizationError) {
+    console.error('Sanitization error:', sanitizationError)
+    return errorResponse('Input sanitization failed', 500)
   }
 
   const authHeader = request.headers.get('Authorization')!

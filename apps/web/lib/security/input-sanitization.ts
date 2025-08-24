@@ -1,7 +1,34 @@
-import createDOMPurify from 'isomorphic-dompurify'
 import validator from 'validator'
 
-const DOMPurify = createDOMPurify()
+// Lazy load DOMPurify to handle serverless environment
+let DOMPurify: any = null
+
+function getDOMPurify() {
+  if (!DOMPurify) {
+    try {
+      const createDOMPurify = require('isomorphic-dompurify')
+      DOMPurify = createDOMPurify()
+    } catch (error) {
+      console.error('Failed to initialize DOMPurify:', error)
+      // Fallback: create a mock DOMPurify with basic HTML stripping
+      DOMPurify = {
+        sanitize: (input: string, config?: any) => {
+          if (!input) return input
+          // Basic HTML tag removal as fallback
+          let cleaned = input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+          cleaned = cleaned.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+          if (config?.ALLOWED_TAGS && config.ALLOWED_TAGS.length === 0) {
+            // If no tags allowed, strip all HTML
+            cleaned = cleaned.replace(/<[^>]*>/g, '')
+          }
+          return cleaned
+        }
+      }
+    }
+  }
+  return DOMPurify
+}
 
 // Configure DOMPurify for different contexts
 const CONFIG = {
@@ -60,7 +87,8 @@ export function sanitizeHTML(input: string, options: SanitizationOptions = {}): 
   if (customConfig) config = { ...config, ...customConfig }
 
   // Sanitize with DOMPurify
-  sanitized = DOMPurify.sanitize(sanitized, config)
+  const domPurify = getDOMPurify()
+  sanitized = domPurify.sanitize(sanitized, config)
 
   return sanitized.trim()
 }
