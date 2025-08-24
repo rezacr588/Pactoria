@@ -14,12 +14,13 @@ model Contract {
   title               String
   status              String                 @default("draft")
   latestVersionNumber Int                    @default(0) @map("latest_version_number")
+  metadata            Json?
   createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   activity            ContractActivity[]
   approvals           ContractApproval[]
   collaborators       ContractCollaborator[]
-  metadata            ContractMetadata[]
+  metadataRecords     ContractMetadata[]     @relation("ContractMetadataRecords")
   parties             ContractParty[]
   versions            ContractVersion[]
 
@@ -293,7 +294,7 @@ model ContractMetadata {
   valueType  String   @default("string") @map("value_type")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contract   Contract @relation("ContractMetadataRecords", fields: [contractId], references: [id], onDelete: Cascade)
 
   @@unique([contractId, key])
   @@index([contractId], map: "idx_contract_metadata_contract_id")
