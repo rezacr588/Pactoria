@@ -90,3 +90,4 @@ generated/
 # Build artifacts
 *.zip
 *.tar.gz
+/apps/web/quick-deploy.md
