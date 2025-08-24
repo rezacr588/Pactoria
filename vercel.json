@@ -2,11 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "name": "pactoria",
   "version": 2,
-  "buildCommand": "cd apps/web && npm run build",
-  "installCommand": "npm install && cd apps/web && npm install",
-  "outputDirectory": "apps/web/.next",
-  "devCommand": "cd apps/web && npm run dev",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": ".next",
+  "devCommand": "npm run dev",
   "framework": "nextjs",
+  "rootDirectory": "apps/web",
   "regions": ["iad1"],
   "headers": [
     {
