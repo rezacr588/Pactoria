@@ -26,10 +26,10 @@
     }
   ],
   "functions": {
-    "apps/web/app/api/ai/route.ts": {
+    "app/api/ai/route.ts": {
       "maxDuration": 30
     },
-    "apps/web/app/api/contracts/[id]/snapshot/route.ts": {
+    "app/api/contracts/[id]/snapshot/route.ts": {
       "maxDuration": 30
     }
   }
