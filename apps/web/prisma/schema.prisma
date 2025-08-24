@@ -8,326 +8,311 @@ datasource db {
   directUrl = "postgresql://postgres.efqljjmausicfkhjhhtl:Ww!97905199@aws-1-eu-west-2.pooler.supabase.com:5432/postgres"
 }
 
-model Contract {
-  id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ownerId             String                 @map("owner_id") @db.Uuid
-  title               String
-  status              String                 @default("draft")
-  latestVersionNumber Int                    @default(0) @map("latest_version_number")
-  metadata            Json?
-  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  activity            ContractActivity[]
-  approvals           ContractApproval[]
-  collaborators       ContractCollaborator[]
-  metadataRecords     ContractMetadata[]     @relation("ContractMetadataRecords")
-  parties             ContractParty[]
-  versions            ContractVersion[]
-
-  @@index([ownerId], map: "idx_contracts_owner")
-  @@map("contracts")
-}
-
-model ContractVersion {
-  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId    String             @map("contract_id") @db.Uuid
-  versionNumber Int                @map("version_number")
-  ydocState     Bytes?             @map("ydoc_state")
-  contentMd     String?            @map("content_md")
-  contentJson   Json?              @map("content_json")
-  createdBy     String?            @map("created_by") @db.Uuid
-  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  approvals     ContractApproval[]
-  contract      Contract           @relation(fields: [contractId], references: [id], onDelete: Cascade)
-
-  @@unique([contractId, versionNumber])
-  @@index([contractId], map: "idx_versions_contract")
-  @@map("contract_versions")
-}
-
-model ContractApproval {
-  id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId String          @map("contract_id") @db.Uuid
-  versionId  String          @map("version_id") @db.Uuid
-  approverId String          @map("approver_id") @db.Uuid
-  status     String          @default("pending")
-  comment    String?
-  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  decidedAt  DateTime?       @map("decided_at") @db.Timestamptz(6)
-  contract   Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  version    ContractVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-
-  @@index([contractId], map: "idx_approvals_contract")
-  @@index([approverId], map: "idx_approvals_approver")
-  @@map("contract_approvals")
-}
-
-model ContractCollaborator {
+model analytics_events {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId String   @map("contract_id") @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  role       String   @default("viewer")
-  addedBy    String   @map("added_by") @db.Uuid
-  addedAt    DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
-  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user_id    String?  @db.Uuid
+  session_id String?
+  event_type String
+  event_data Json?
+  user_agent String?
+  ip_address String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
 
-  @@unique([contractId, userId])
-  @@index([contractId], map: "idx_contract_collaborators_contract")
-  @@index([userId], map: "idx_contract_collaborators_user")
-  @@map("contract_collaborators")
+  @@index([created_at], map: "idx_analytics_events_created")
+  @@index([event_type], map: "idx_analytics_events_type")
+  @@index([user_id], map: "idx_analytics_events_user")
 }
 
-model Profile {
-  id               String   @id @db.Uuid
-  email            String?
-  fullName         String?  @map("full_name")
-  avatarUrl        String?  @map("avatar_url")
-  bio              String?
-  company          String?
-  jobTitle         String?  @map("job_title")
-  phone            String?
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  subscriptionTier String?  @map("subscription_tier")
-  stripeCustomerId String?  @unique @map("stripe_customer_id")
-
-  @@index([email], map: "idx_profiles_email")
-  @@map("profiles")
-}
-
-model Template {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title           String
-  description     String?
-  category        String   @default("general")
-  contentMd       String   @map("content_md")
-  tags            String[] @default([])
-  isPublic        Boolean  @default(true) @map("is_public")
-  isOfficial      Boolean  @default(false) @map("is_official")
-  usageCount      Int      @default(0) @map("usage_count")
-  createdByUserId String?  @map("created_by_user_id") @db.Uuid
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  contentJson     Json?    @map("content_json")
-  thumbnailUrl    String?  @map("thumbnail_url")
-  isFeatured      Boolean  @default(false) @map("is_featured")
-  published       Boolean  @default(false)
-  rating          Float    @default(0.0)
-  createdBy       String?  @map("created_by")
-  currency        String   @default("USD")
-  price           Float    @default(0.0)
-  reviewsCount    Int      @default(0) @map("reviews_count")
-  tierRequired    String   @default("free") @map("tier_required")
-  variables       Json     @default("[]")
-
-  @@index([category], map: "idx_templates_category")
-  @@index([isPublic], map: "idx_templates_public")
-  @@index([isFeatured], map: "idx_templates_featured")
-  @@index([createdBy], map: "idx_templates_created_by")
-  @@index([createdByUserId], map: "idx_templates_creator")
-  @@map("templates")
-}
-
-model EmailNotification {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  recipientEmail String    @map("recipient_email")
-  subject        String
-  body           String
-  templateId     String?   @map("template_id")
-  templateData   Json?     @map("template_data")
-  status         String    @default("pending")
-  sentAt         DateTime? @map("sent_at") @db.Timestamptz(6)
-  errorMessage   String?   @map("error_message")
-  retryCount     Int       @default(0) @map("retry_count")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@index([status], map: "idx_email_notifications_status")
-  @@index([createdAt], map: "idx_email_notifications_created")
-  @@map("email_notifications")
-}
-
-model AnalyticsEvent {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String?  @map("user_id") @db.Uuid
-  sessionId String?  @map("session_id")
-  eventType String   @map("event_type")
-  eventData Json?    @map("event_data")
-  userAgent String?  @map("user_agent")
-  ipAddress String?  @map("ip_address")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@index([userId], map: "idx_analytics_events_user")
-  @@index([eventType], map: "idx_analytics_events_type")
-  @@index([createdAt], map: "idx_analytics_events_created")
-  @@map("analytics_events")
-}
-
-model PerformanceMetric {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  metricName String   @map("metric_name")
-  value      Float
-  unit       String?
-  tags       Json?
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@index([metricName], map: "idx_performance_metrics_name")
-  @@index([createdAt], map: "idx_performance_metrics_created")
-  @@map("performance_metrics")
-}
-
-model Subscription {
-  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId               String        @map("user_id") @db.Uuid
-  stripeCustomerId     String?       @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?       @unique @map("stripe_subscription_id")
-  stripePriceId        String?       @map("stripe_price_id")
-  tierId               String        @default("free") @map("tier_id")
-  status               String        @default("active")
-  currentPeriodStart   DateTime?     @map("current_period_start") @db.Timestamptz(6)
-  currentPeriodEnd     DateTime?     @map("current_period_end") @db.Timestamptz(6)
-  cancelAtPeriodEnd    Boolean       @default(false) @map("cancel_at_period_end")
-  canceledAt           DateTime?     @map("canceled_at") @db.Timestamptz(6)
-  trialStart           DateTime?     @map("trial_start") @db.Timestamptz(6)
-  trialEnd             DateTime?     @map("trial_end") @db.Timestamptz(6)
-  metadata             Json          @default("{}")
-  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization         Organization?
-
-  @@index([userId], map: "idx_subscriptions_user")
-  @@index([tierId], map: "idx_subscriptions_tier")
-  @@map("subscriptions")
-}
-
-model Organization {
-  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name             String
-  slug             String               @unique
-  ownerId          String               @map("owner_id") @db.Uuid
-  stripeCustomerId String?              @unique @map("stripe_customer_id")
-  subscriptionId   String?              @unique @map("subscription_id") @db.Uuid
-  settings         Json                 @default("{}")
-  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  invoices         Invoice[]
-  members          OrganizationMember[]
-  subscription     Subscription?        @relation(fields: [subscriptionId], references: [id])
-
-  @@index([ownerId], map: "idx_organizations_owner")
-  @@map("organizations")
-}
-
-model OrganizationMember {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String       @map("organization_id") @db.Uuid
-  userId         String       @map("user_id") @db.Uuid
-  role           String       @default("member")
-  invitedBy      String?      @map("invited_by") @db.Uuid
-  invitedAt      DateTime     @default(now()) @map("invited_at") @db.Timestamptz(6)
-  joinedAt       DateTime?    @map("joined_at") @db.Timestamptz(6)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@unique([organizationId, userId])
-  @@map("organization_members")
-}
-
-model Invoice {
-  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId           String        @map("user_id") @db.Uuid
-  organizationId   String?       @map("organization_id") @db.Uuid
-  stripeInvoiceId  String?       @unique @map("stripe_invoice_id")
-  stripeInvoiceUrl String?       @map("stripe_invoice_url")
-  stripePdfUrl     String?       @map("stripe_pdf_url")
-  amountPaid       Int?          @map("amount_paid")
-  amountDue        Int?          @map("amount_due")
-  currency         String        @default("gbp")
-  status           String
-  periodStart      DateTime?     @map("period_start") @db.Timestamptz(6)
-  periodEnd        DateTime?     @map("period_end") @db.Timestamptz(6)
-  paidAt           DateTime?     @map("paid_at") @db.Timestamptz(6)
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([userId], map: "idx_invoices_user")
-  @@index([status], map: "idx_invoices_status")
-  @@map("invoices")
-}
-
-model UsageTracking {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  resourceType String   @map("resource_type")
-  resourceId   String?  @map("resource_id")
-  count        Int      @default(1)
-  date         DateTime @default(now()) @db.Date
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@unique([userId, resourceType, resourceId, date])
-  @@index([userId, date], map: "idx_usage_tracking_user_date")
-  @@map("usage_tracking")
-}
-
-model ContractParty {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId  String   @map("contract_id") @db.Uuid
-  partyName   String   @map("party_name")
-  partyEmail  String?  @map("party_email")
-  partyType   String   @default("individual") @map("party_type")
-  partyRole   String   @default("party") @map("party_role")
-  isPrimary   Boolean  @default(false) @map("is_primary")
-  contactInfo Json     @default("{}") @map("contact_info")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-
-  @@index([contractId], map: "idx_contract_parties_contract_id")
-  @@index([partyEmail], map: "idx_contract_parties_email")
-  @@map("contract_parties")
-}
-
-model ContractMetadata {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId String   @map("contract_id") @db.Uuid
-  key        String
-  value      String?
-  valueType  String   @default("string") @map("value_type")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  contract   Contract @relation("ContractMetadataRecords", fields: [contractId], references: [id], onDelete: Cascade)
-
-  @@unique([contractId, key])
-  @@index([contractId], map: "idx_contract_metadata_contract_id")
-  @@index([key], map: "idx_contract_metadata_key")
-  @@map("contract_metadata")
-}
-
-model ContractActivity {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId  String   @map("contract_id") @db.Uuid
-  userId      String?  @map("user_id") @db.Uuid
+model contract_activity {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id String    @db.Uuid
+  user_id     String?   @db.Uuid
   action      String
   description String?
-  metadata    Json     @default("{}")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  metadata    Json      @default("{}")
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  contracts   contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
 
-  @@index([contractId], map: "idx_contract_activity_contract_id")
-  @@index([userId], map: "idx_contract_activity_user_id")
-  @@index([createdAt(sort: Desc)], map: "idx_contract_activity_created_at")
   @@index([action], map: "idx_contract_activity_action")
-  @@map("contract_activity")
+  @@index([contract_id], map: "idx_contract_activity_contract_id")
+  @@index([created_at(sort: Desc)], map: "idx_contract_activity_created_at")
+  @@index([user_id], map: "idx_contract_activity_user_id")
 }
 
-model RateLimit {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  key       String   @unique
-  count     Int      @default(0)
-  resetTime DateTime @map("reset_time") @db.Timestamptz(6)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+model contract_approvals {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id       String            @db.Uuid
+  version_id        String            @db.Uuid
+  approver_id       String            @db.Uuid
+  status            String            @default("pending")
+  comment           String?
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  decided_at        DateTime?         @db.Timestamptz(6)
+  contracts         contracts         @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+  contract_versions contract_versions @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  @@index([approver_id], map: "idx_approvals_approver")
+  @@index([contract_id], map: "idx_approvals_contract")
+}
+
+model contract_collaborators {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id String    @db.Uuid
+  user_id     String    @db.Uuid
+  role        String    @default("viewer")
+  added_by    String    @db.Uuid
+  added_at    DateTime  @default(now()) @db.Timestamptz(6)
+  contracts   contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@unique([contract_id, user_id])
+  @@index([contract_id], map: "idx_contract_collaborators_contract")
+  @@index([user_id], map: "idx_contract_collaborators_user")
+}
+
+model contract_metadata {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id String    @db.Uuid
+  key         String
+  value       String?
+  value_type  String    @default("string")
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
+  contracts   contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@unique([contract_id, key])
+  @@index([contract_id], map: "idx_contract_metadata_contract_id")
+  @@index([key], map: "idx_contract_metadata_key")
+}
+
+model contract_parties {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id  String    @db.Uuid
+  party_name   String
+  party_email  String?
+  party_type   String    @default("individual")
+  party_role   String    @default("party")
+  is_primary   Boolean   @default(false)
+  contact_info Json      @default("{}")
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+  contracts    contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@index([contract_id], map: "idx_contract_parties_contract_id")
+  @@index([party_email], map: "idx_contract_parties_email")
+}
+
+model contract_versions {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id        String               @db.Uuid
+  version_number     Int
+  ydoc_state         Bytes?
+  content_md         String?
+  content_json       Json?
+  created_by         String?              @db.Uuid
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  contract_approvals contract_approvals[]
+  contracts          contracts            @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@unique([contract_id, version_number])
+  @@index([contract_id], map: "idx_versions_contract")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model contracts {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  owner_id               String                   @db.Uuid
+  title                  String
+  status                 String                   @default("draft")
+  latest_version_number  Int                      @default(0)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  metadata               Json?
+  contract_activity      contract_activity[]
+  contract_approvals     contract_approvals[]
+  contract_collaborators contract_collaborators[]
+  contract_metadata      contract_metadata[]
+  contract_parties       contract_parties[]
+  contract_versions      contract_versions[]
+
+  @@index([owner_id], map: "idx_contracts_owner")
+}
+
+model email_notifications {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipient_email String
+  subject         String
+  body            String
+  template_id     String?
+  template_data   Json?
+  status          String    @default("pending")
+  sent_at         DateTime? @db.Timestamptz(6)
+  error_message   String?
+  retry_count     Int       @default(0)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at], map: "idx_email_notifications_created")
+  @@index([status], map: "idx_email_notifications_status")
+}
+
+model invoices {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String         @db.Uuid
+  organization_id    String?        @db.Uuid
+  stripe_invoice_id  String?        @unique
+  stripe_invoice_url String?
+  stripe_pdf_url     String?
+  amount_paid        Int?
+  amount_due         Int?
+  currency           String         @default("gbp")
+  status             String
+  period_start       DateTime?      @db.Timestamptz(6)
+  period_end         DateTime?      @db.Timestamptz(6)
+  paid_at            DateTime?      @db.Timestamptz(6)
+  created_at         DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime       @default(now()) @db.Timestamptz(6)
+  organizations      organizations? @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@index([status], map: "idx_invoices_status")
+  @@index([user_id], map: "idx_invoices_user")
+}
+
+model organization_members {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organization_id String        @db.Uuid
+  user_id         String        @db.Uuid
+  role            String        @default("member")
+  invited_by      String?       @db.Uuid
+  invited_at      DateTime      @default(now()) @db.Timestamptz(6)
+  joined_at       DateTime?     @db.Timestamptz(6)
+  organizations   organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([organization_id, user_id])
+}
+
+model organizations {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String
+  slug                 String                 @unique
+  owner_id             String                 @db.Uuid
+  stripe_customer_id   String?                @unique
+  subscription_id      String?                @unique @db.Uuid
+  settings             Json                   @default("{}")
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  invoices             invoices[]
+  organization_members organization_members[]
+  subscriptions        subscriptions?         @relation(fields: [subscription_id], references: [id])
+
+  @@index([owner_id], map: "idx_organizations_owner")
+}
+
+model performance_metrics {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  metric_name String
+  value       Float
+  unit        String?
+  tags        Json?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at], map: "idx_performance_metrics_created")
+  @@index([metric_name], map: "idx_performance_metrics_name")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model profiles {
+  id                 String   @id @db.Uuid
+  email              String?
+  full_name          String?
+  avatar_url         String?
+  bio                String?
+  company            String?
+  job_title          String?
+  phone              String?
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime @default(now()) @db.Timestamptz(6)
+  subscription_tier  String?
+  stripe_customer_id String?  @unique
+
+  @@index([email], map: "idx_profiles_email")
+}
+
+model rate_limits {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key        String   @unique
+  count      Int      @default(0)
+  reset_time DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([key], map: "idx_rate_limits_key")
-  @@index([resetTime], map: "idx_rate_limits_reset_time")
-  @@map("rate_limits")
+  @@index([reset_time], map: "idx_rate_limits_reset_time")
+}
+
+model subscriptions {
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                String         @db.Uuid
+  stripe_customer_id     String?        @unique
+  stripe_subscription_id String?        @unique
+  stripe_price_id        String?
+  tier_id                String         @default("free")
+  status                 String         @default("active")
+  current_period_start   DateTime?      @db.Timestamptz(6)
+  current_period_end     DateTime?      @db.Timestamptz(6)
+  cancel_at_period_end   Boolean        @default(false)
+  canceled_at            DateTime?      @db.Timestamptz(6)
+  trial_start            DateTime?      @db.Timestamptz(6)
+  trial_end              DateTime?      @db.Timestamptz(6)
+  metadata               Json           @default("{}")
+  created_at             DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime       @default(now()) @db.Timestamptz(6)
+  organizations          organizations?
+
+  @@index([tier_id], map: "idx_subscriptions_tier")
+  @@index([user_id], map: "idx_subscriptions_user")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model templates {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title              String
+  description        String?
+  category           String   @default("general")
+  content_md         String
+  tags               String[] @default([])
+  is_public          Boolean  @default(true)
+  is_official        Boolean  @default(false)
+  usage_count        Int      @default(0)
+  created_by_user_id String?  @db.Uuid
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime @default(now()) @db.Timestamptz(6)
+  content_json       Json?
+  thumbnail_url      String?
+  is_featured        Boolean  @default(false)
+  published          Boolean  @default(false)
+  rating             Float    @default(0.0)
+  created_by         String?
+  currency           String   @default("USD")
+  price              Float    @default(0.0)
+  reviews_count      Int      @default(0)
+  tier_required      String   @default("free")
+  variables          Json     @default("[]")
+
+  @@index([category], map: "idx_templates_category")
+  @@index([created_by], map: "idx_templates_created_by")
+  @@index([created_by_user_id], map: "idx_templates_creator")
+  @@index([is_featured], map: "idx_templates_featured")
+  @@index([is_public], map: "idx_templates_public")
+}
+
+model usage_tracking {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String   @db.Uuid
+  resource_type String
+  resource_id   String?
+  count         Int      @default(1)
+  date          DateTime @default(now()) @db.Date
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([user_id, resource_type, resource_id, date])
+  @@index([user_id, date], map: "idx_usage_tracking_user_date")
 }
