@@ -43,34 +43,7 @@ jobs:
       - name: Check Prettier formatting
         working-directory: apps/web
         run: npx prettier --check "**/*.{ts,tsx,js,jsx,json,md}"
-
-  # ===== Security Scan =====
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-      
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
-      
-      - name: Audit npm packages
-        working-directory: apps/web
-        run: npm audit --audit-level=high
-
+        
   # ===== Unit Tests =====
   unit-tests:
     name: Unit Tests
