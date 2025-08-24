@@ -68,6 +68,9 @@
     "zod": "^3.23.8",
     "zustand": "^4.5.7"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",
     "@playwright/test": "^1.55.0",
