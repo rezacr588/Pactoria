@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { exportToPDF, exportToDOCX, ExportOptions, ContractData } from '@/lib/export/document-export';
-import { hasFeatureAccess } from '@/lib/stripe/config';
-
 // Ensure this route is not statically pre-rendered
 export const dynamic = 'force-dynamic';
 
@@ -35,22 +33,8 @@ export async function POST(
       watermark: body.watermark || '',
     };
 
-    // Get user's subscription tier for feature access
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('subscription_tier')
-      .eq('id', user.id)
-      .single();
-
-    const userTier = (profile?.subscription_tier?.toUpperCase() || 'FREE') as 'FREE' | 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
-
-    // Check export permission
-    if (!hasFeatureAccess(userTier, 'export')) {
-      return NextResponse.json(
-        { error: 'Export feature not available in your current plan' },
-        { status: 403 }
-      );
-    }
+    // All users can export (removed subscription restrictions)
+    console.log('Export allowed for all users')
 
     // Fetch contract data with all related information
     const { data: contractData, error: contractError } = await supabase
@@ -149,14 +133,7 @@ export async function POST(
       })) || [],
     };
 
-    // Apply tier restrictions
-    if (userTier === 'STARTER') {
-      exportOptions.includeVersionHistory = false;
-    }
-    
-    if (userTier !== 'PROFESSIONAL' && userTier !== 'ENTERPRISE') {
-      exportOptions.watermark = '';
-    }
+    // All features are now free - no tier restrictions
 
     // Generate document based on format
     let documentBlob: Blob;

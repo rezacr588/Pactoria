@@ -37,24 +37,16 @@ export const GET = apiHandler(async (request: NextRequest) => {
         title,
         category,
         description,
-        rating,
         usage_count,
-        reviews_count,
-        is_featured,
-        thumbnail_url,
-        variables,
-        tier_required,
-        content_json,
         content_md,
         tags,
-        price,
-        currency,
-        created_by,
-        created_at
+        is_public,
+        is_official,
+        created_by_user_id,
+        created_at,
+        updated_at
       `)
-      .eq('published', true)
       .eq('is_public', true)
-      .order('is_featured', { ascending: false })
       .order('usage_count', { ascending: false })
       .limit(limit)
 
@@ -63,7 +55,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
     }
 
     if (featured) {
-      query = query.eq('is_featured', true)
+      query = query.eq('is_official', true) // Use is_official as proxy for featured
     }
 
     const { data: templates, error } = await query
@@ -107,17 +99,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
       description: body!.description,
       category: body!.category,
       content_md: body!.content_md,
-      content_json: body!.content_json || null,
       tags: body!.tags || [],
       is_public: body!.is_public ?? false,
-      price: body!.price || 0,
-      variables: body!.variables || [],
-      created_by: user!.id,
-      published: false, // New templates start as drafts
-      rating: 0,
-      reviews_count: 0,
+      is_official: false,
       usage_count: 0,
-      is_featured: false
+      created_by_user_id: user!.id
     }
 
     const { data: template, error } = await supabase

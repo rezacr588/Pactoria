@@ -25,7 +25,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ExportOptions, ContractData } from '@/lib/export/document-export';
-import { hasFeatureAccess } from '@/lib/stripe/config';
+// Removed Stripe dependency - all features are now free
 import { toast } from 'sonner';
 
 interface ExportButtonProps {
@@ -54,7 +54,7 @@ export function ExportButton({
     watermark: '',
   });
 
-  const canExport = hasFeatureAccess(userTier, 'export');
+  const canExport = true; // All users can export now
 
   const handleExport = async () => {
     if (!canExport) {
