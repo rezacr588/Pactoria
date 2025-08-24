@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
 import type { Contract, ContractWithRelations } from '@/types'
 import { Plus, FileText, Clock, CheckCircle, XCircle, Edit2, Trash2 } from 'lucide-react'
+import PresenceAvatars from '@/components/editor/PresenceAvatars'
 
 export function ContractsList() {
   const [newTitle, setNewTitle] = useState('')
@@ -191,6 +192,9 @@ export function ContractsList() {
                   Version
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Collaboration
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   Updated
                 </th>
                 <th className="relative px-6 py-3">
@@ -228,6 +232,13 @@ export function ContractsList() {
                         ({contract.contract_versions.length} versions)
                       </span>
                     )}
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <PresenceAvatars 
+                      contractId={contract.id} 
+                      maxVisible={3}
+                      className="flex items-center"
+                    />
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                     {new Date(contract.updated_at).toLocaleDateString()}

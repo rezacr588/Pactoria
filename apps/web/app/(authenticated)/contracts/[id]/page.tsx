@@ -10,6 +10,7 @@ import VersionTimeline from '@/components/versions/VersionTimeline'
 import ApprovalsPanel from '@/components/approvals/ApprovalsPanel'
 import { RiskAnalysisPanel } from '@/components/contracts/RiskAnalysisPanel'
 import { ExportButton } from '@/components/contracts/export-button'
+import { ShareContractDialog } from '@/components/contracts/ShareContractDialog'
 import type { ContractData } from '@/lib/export/document-export'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,6 +37,8 @@ export default function ContractDetailPage() {
   const contractId = params.id as string
   
   const [isReadOnly, setIsReadOnly] = useState(false)
+  const [activeCollaborators, setActiveCollaborators] = useState(0)
+  const [showShareDialog, setShowShareDialog] = useState(false)
 
   // Fetch contract details
   const { data: contractData, isLoading, error } = useQuery<ContractDetailResponse>({
@@ -185,7 +188,18 @@ export default function ContractDetailPage() {
               
               <div className="flex items-center space-x-3">
                 {/* Presence avatars */}
-                <PresenceAvatars contractId={contractId} />
+                <PresenceAvatars 
+                  contractId={contractId} 
+                  onActiveUsersChange={setActiveCollaborators}
+                />
+                
+                {/* Collaboration status badge */}
+                {activeCollaborators > 0 && (
+                  <Badge variant="secondary" className="bg-green-100 text-green-800">
+                    <Users className="h-3 w-3 mr-1" />
+                    {activeCollaborators} live
+                  </Badge>
+                )}
                 
                 {/* Status selector */}
                 <select
@@ -332,7 +346,12 @@ export default function ContractDetailPage() {
                   <CardTitle className="text-sm">Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full justify-start"
+                    onClick={() => setShowShareDialog(true)}
+                  >
                     <Share className="h-4 w-4 mr-2" />
                     Share Contract
                   </Button>
@@ -350,6 +369,14 @@ export default function ContractDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Share Dialog */}
+      <ShareContractDialog
+        contractId={contractId}
+        contractTitle={contract.title}
+        isOpen={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+      />
     </div>
   )
 }

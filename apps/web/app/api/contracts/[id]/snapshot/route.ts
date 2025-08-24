@@ -2,12 +2,12 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { 
   apiHandler, 
-  createSupabaseClient, 
   requireAuth, 
   successResponse, 
   errorResponse,
   validateBody
 } from '@/lib/api/utils'
+import { db } from '@/lib/db'
 
 // Snapshot schema
 const snapshotSchema = z.object({
@@ -20,7 +20,7 @@ const snapshotSchema = z.object({
 
 export const POST = apiHandler(async (request: NextRequest, { params }: { params: { id: string } }) => {
   // Check authentication
-  const { error: authError } = await requireAuth(request)
+  const { userId, error: authError } = await requireAuth(request)
   if (authError) return authError
 
   // Validate request body
@@ -30,30 +30,55 @@ export const POST = apiHandler(async (request: NextRequest, { params }: { params
   )
   if (validationError) return validationError
 
-  const supabase = createSupabaseClient(request)
   const contractId = params.id
 
   try {
-    // Call the RPC function to create snapshot atomically
-    const { data: version, error } = await supabase.rpc('create_version_snapshot', {
-      p_contract_id: contractId,
-      p_content_json: body!.content_json || null,
-      p_content_md: body!.content_md || null,
-      p_ydoc_state_base64: body!.ydoc_state || null
+    // Use Prisma transaction to create snapshot atomically
+    const result = await db.$transaction(async (tx) => {
+      // First verify the user owns this contract
+      const contract = await tx.contracts.findFirst({
+        where: {
+          id: contractId,
+          owner_id: userId!
+        },
+        select: {
+          id: true,
+          latest_version_number: true
+        }
+      })
+
+      if (!contract) {
+        throw new Error('Contract not found')
+      }
+
+      // Get the next version number
+      const nextVersionNumber = (contract.latest_version_number || 0) + 1
+
+      // Create the new version
+      const version = await tx.contract_versions.create({
+        data: {
+          contract_id: contractId,
+          version_number: nextVersionNumber,
+          content_json: body!.content_json || null,
+          content_md: body!.content_md || null,
+          ydoc_state: body!.ydoc_state ? Buffer.from(body!.ydoc_state, 'base64') : null,
+          created_by: userId!
+        }
+      })
+
+      // Update the contract's latest version number
+      await tx.contracts.update({
+        where: { id: contractId },
+        data: { latest_version_number: nextVersionNumber }
+      })
+
+      return version
     })
     
-    if (error) {
-      console.error('Error creating snapshot:', error)
-      return errorResponse(error.message, 400)
-    }
-    
-    // The RPC returns a table, so get the first row
-    const versionData = Array.isArray(version) ? version[0] : version
-    
-    return successResponse({ version: versionData })
+    return successResponse({ version: result })
     
   } catch (error: any) {
     console.error('Snapshot API error:', error)
-    return errorResponse(error.message, 500)
+    return errorResponse(error.message || 'Failed to create snapshot', 500)
   }
 })

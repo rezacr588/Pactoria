@@ -19,6 +19,7 @@ interface PresenceAvatarsProps {
   contractId: string
   className?: string
   maxVisible?: number
+  onActiveUsersChange?: (count: number) => void
 }
 
 const AVATAR_COLORS = [
@@ -49,7 +50,8 @@ function getInitials(name: string): string {
 export default function PresenceAvatars({
   contractId,
   className = '',
-  maxVisible = 5
+  maxVisible = 5,
+  onActiveUsersChange
 }: PresenceAvatarsProps) {
   const { user } = useAuth()
   const [presences, setPresences] = useState<Record<string, PresenceState>>({})
@@ -81,17 +83,27 @@ export default function PresenceAvatars({
         })
         
         setPresences(formattedPresences)
+        // Notify parent of active users count (excluding current user)
+        const activeCount = Object.keys(formattedPresences).filter(id => id !== user?.id).length
+        onActiveUsersChange?.(activeCount)
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        setPresences(prev => ({
-          ...prev,
-          [key]: newPresences[0] as unknown as PresenceState
-        }))
+        setPresences(prev => {
+          const updated = {
+            ...prev,
+            [key]: newPresences[0] as unknown as PresenceState
+          }
+          const activeCount = Object.keys(updated).filter(id => id !== user?.id).length
+          onActiveUsersChange?.(activeCount)
+          return updated
+        })
       })
       .on('presence', { event: 'leave' }, ({ key }) => {
         setPresences(prev => {
           const updated = { ...prev }
           delete updated[key]
+          const activeCount = Object.keys(updated).filter(id => id !== user?.id).length
+          onActiveUsersChange?.(activeCount)
           return updated
         })
       })

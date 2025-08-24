@@ -322,7 +322,19 @@ export default function NewContract() {
                               ?.filter(t => t.is_public)
                               ?.map((template) => (
                                 <SelectItem key={template.id} value={template.id}>
-                                  {template.title}
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>{template.title}</span>
+                                    <div className="flex items-center space-x-1">
+                                      {template.is_official && (
+                                        <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
+                                          Official
+                                        </span>
+                                      )}
+                                      <span className="text-xs text-gray-500">
+                                        {template.usage_count || 0} uses
+                                      </span>
+                                    </div>
+                                  </div>
                                 </SelectItem>
                               ))}
                           </SelectContent>

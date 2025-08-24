@@ -4,7 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { FileText, Home, BarChart3, LogOut, User, Settings, ChevronDown, Bell, HelpCircle, Book } from 'lucide-react'
+import { FileText, Home, BarChart3, LogOut, User, Settings, ChevronDown, HelpCircle, Book } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 
 export function Header() {
   const pathname = usePathname()
@@ -89,14 +88,6 @@ export function Header() {
           <div className="flex items-center space-x-4">
             {user ? (
               <>
-                {/* Notifications */}
-                <Button variant="ghost" size="sm" className="relative">
-                  <Bell className="h-4 w-4" />
-                  <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 text-xs bg-red-500 text-white">
-                    2
-                  </Badge>
-                </Button>
-                
                 {/* Help */}
                 <Button variant="ghost" size="sm">
                   <HelpCircle className="h-4 w-4" />
