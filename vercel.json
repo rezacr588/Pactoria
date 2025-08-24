@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "name": "pactoria",
   "version": 2,
-  "monorepo": true,
   "buildCommand": "cd apps/web && npm run build",
   "installCommand": "npm install && cd apps/web && npm install",
   "outputDirectory": "apps/web/.next",
