@@ -149,7 +149,6 @@ export class ContractGenerationGraph {
 
   // Compliance Check Agent
   static checkCompliance(state: WorkflowState): WorkflowState {
-    const { jurisdiction, governingLaw } = state.requirements
     const complianceIssues = this.validateCompliance()
     
     if (complianceIssues.critical.length > 0) {

@@ -15,7 +15,7 @@ export const ContractClause = Extension.create({
 
   addCommands() {
     return {
-      insertClause: (clauseId: string) => ({ commands }) => {
+      insertClause: (clauseId: string) => ({ commands }: any) => {
         const clause = this.options.clauseLibrary.find((c: any) => c.id === clauseId)
         if (clause) {
           this.options.onClauseInsert(clause)
@@ -23,7 +23,7 @@ export const ContractClause = Extension.create({
         }
         return false
       },
-    }
+    } as any
   },
 })
 
@@ -51,7 +51,7 @@ export const Redline = Mark.create({
       comment: {
         default: null,
       },
-    }
+    } as any
   },
 
   parseHTML() {
@@ -84,14 +84,14 @@ export const Redline = Mark.create({
 
   addCommands() {
     return {
-      toggleRedline: (attributes: { type: 'addition' | 'deletion'; author?: string; comment?: string }) => ({ commands }) => {
+      toggleRedline: (attributes: { type: 'addition' | 'deletion'; author?: string; comment?: string }) => ({ commands }: any) => {
         return commands.toggleMark(this.name, attributes)
       },
-      acceptRedline: () => ({ commands, editor }) => {
+      acceptRedline: () => ({ commands, editor }: any) => {
         const { from, to } = editor.state.selection
         const marks = editor.state.doc.slice(from, to).content.marks
         
-        marks.forEach(mark => {
+        marks.forEach((mark: any) => {
           if (mark.type.name === 'redline') {
             if (mark.attrs.type === 'deletion') {
               // Remove text with deletion mark
@@ -105,11 +105,11 @@ export const Redline = Mark.create({
         
         return true
       },
-      rejectRedline: () => ({ commands, editor }) => {
+      rejectRedline: () => ({ commands, editor }: any) => {
         const { from, to } = editor.state.selection
         const marks = editor.state.doc.slice(from, to).content.marks
         
-        marks.forEach(mark => {
+        marks.forEach((mark: any) => {
           if (mark.type.name === 'redline') {
             if (mark.attrs.type === 'addition') {
               // Remove text with addition mark
@@ -123,7 +123,7 @@ export const Redline = Mark.create({
         
         return true
       },
-    }
+    } as any
   },
 })
 
@@ -151,29 +151,25 @@ export const LegalSection = Extension.create({
 
   addCommands() {
     return {
-      insertSection: (sectionType: string) => ({ commands }) => {
-        const template = this.getSectionTemplate(sectionType)
+      insertSection: (sectionType: string) => ({ commands }: any) => {
+        const templates: Record<string, string> = {
+          'Preamble': `<h2>${sectionType}</h2><p>This Agreement is entered into as of [DATE], by and between [PARTY A] and [PARTY B].</p>`,
+          'Recitals': `<h2>${sectionType}</h2><p>WHEREAS, [PARTY A] desires to [PURPOSE];</p><p>WHEREAS, [PARTY B] has the capability to [CAPABILITY];</p><p>NOW, THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth, the parties agree as follows:</p>`,
+          'Definitions': `<h2>${sectionType}</h2><p><strong>"Agreement"</strong> means this [CONTRACT TYPE] agreement.</p><p><strong>"Effective Date"</strong> means [DATE].</p>`,
+          'Terms and Conditions': `<h2>${sectionType}</h2><ol><li>[Term 1]</li><li>[Term 2]</li><li>[Term 3]</li></ol>`,
+          'Warranties and Representations': `<h2>${sectionType}</h2><p>Each party represents and warrants that:</p><ol><li>It has full power and authority to enter into this Agreement;</li><li>This Agreement constitutes a legal, valid, and binding obligation;</li></ol>`,
+          'Indemnification': `<h2>${sectionType}</h2><p>Each party shall indemnify, defend, and hold harmless the other party from and against any claims, damages, losses, and expenses arising out of or resulting from [INDEMNIFICATION SCOPE].</p>`,
+          'Confidentiality': `<h2>${sectionType}</h2><p>The parties acknowledge that they may have access to confidential information. Each party agrees to maintain the confidentiality of such information and not to disclose it to third parties without prior written consent.</p>`,
+          'Termination': `<h2>${sectionType}</h2><p>This Agreement may be terminated:</p><ol><li>By mutual written consent of both parties;</li><li>By either party upon [NUMBER] days written notice;</li><li>Immediately upon material breach by the other party.</li></ol>`,
+          'Dispute Resolution': `<h2>${sectionType}</h2><p>Any dispute arising out of or relating to this Agreement shall be resolved through [ARBITRATION/MEDIATION/LITIGATION] in [JURISDICTION].</p>`,
+          'General Provisions': `<h2>${sectionType}</h2><p><strong>Governing Law:</strong> This Agreement shall be governed by the laws of [JURISDICTION].</p><p><strong>Entire Agreement:</strong> This Agreement constitutes the entire agreement between the parties.</p>`,
+          'Signatures': `<h2>${sectionType}</h2><div class="signature-block"><p>[PARTY A NAME]</p><p>By: _______________________</p><p>Name: [NAME]</p><p>Title: [TITLE]</p><p>Date: [DATE]</p></div>`,
+        }
+        
+        const template = templates[sectionType] || `<h2>${sectionType}</h2><p>[Content for ${sectionType}]</p>`
         return commands.insertContent(template)
       },
-    }
-  },
-
-  getSectionTemplate(sectionType: string) {
-    const templates: Record<string, string> = {
-      'Preamble': `<h2>${sectionType}</h2><p>This Agreement is entered into as of [DATE], by and between [PARTY A] and [PARTY B].</p>`,
-      'Recitals': `<h2>${sectionType}</h2><p>WHEREAS, [PARTY A] desires to [PURPOSE];</p><p>WHEREAS, [PARTY B] has the capability to [CAPABILITY];</p><p>NOW, THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth, the parties agree as follows:</p>`,
-      'Definitions': `<h2>${sectionType}</h2><p><strong>"Agreement"</strong> means this [CONTRACT TYPE] agreement.</p><p><strong>"Effective Date"</strong> means [DATE].</p>`,
-      'Terms and Conditions': `<h2>${sectionType}</h2><ol><li>[Term 1]</li><li>[Term 2]</li><li>[Term 3]</li></ol>`,
-      'Warranties and Representations': `<h2>${sectionType}</h2><p>Each party represents and warrants that:</p><ol><li>It has full power and authority to enter into this Agreement;</li><li>This Agreement constitutes a legal, valid, and binding obligation;</li></ol>`,
-      'Indemnification': `<h2>${sectionType}</h2><p>Each party shall indemnify, defend, and hold harmless the other party from and against any claims, damages, losses, and expenses arising out of or resulting from [INDEMNIFICATION SCOPE].</p>`,
-      'Confidentiality': `<h2>${sectionType}</h2><p>The parties acknowledge that they may have access to confidential information. Each party agrees to maintain the confidentiality of such information and not to disclose it to third parties without prior written consent.</p>`,
-      'Termination': `<h2>${sectionType}</h2><p>This Agreement may be terminated:</p><ol><li>By mutual written consent of both parties;</li><li>By either party upon [NUMBER] days written notice;</li><li>Immediately upon material breach by the other party.</li></ol>`,
-      'Dispute Resolution': `<h2>${sectionType}</h2><p>Any dispute arising out of or relating to this Agreement shall be resolved through [ARBITRATION/MEDIATION/LITIGATION] in [JURISDICTION].</p>`,
-      'General Provisions': `<h2>${sectionType}</h2><p><strong>Governing Law:</strong> This Agreement shall be governed by the laws of [JURISDICTION].</p><p><strong>Entire Agreement:</strong> This Agreement constitutes the entire agreement between the parties.</p>`,
-      'Signatures': `<h2>${sectionType}</h2><div class="signature-block"><p>[PARTY A NAME]</p><p>By: _______________________</p><p>Name: [NAME]</p><p>Title: [TITLE]</p><p>Date: [DATE]</p></div>`,
-    }
-    
-    return templates[sectionType] || `<h2>${sectionType}</h2><p>[Content for ${sectionType}]</p>`
+    } as any
   },
 })
 
@@ -199,7 +195,7 @@ export const ContractVariable = Mark.create({
       required: {
         default: false,
       },
-    }
+    } as any
   },
 
   parseHTML() {
@@ -232,7 +228,7 @@ export const ContractVariable = Mark.create({
 
   addCommands() {
     return {
-      insertVariable: (variableName: string, variableType = 'text', required = false) => ({ commands }) => {
+      insertVariable: (variableName: string, variableType = 'text', required = false) => ({ commands }: any) => {
         return commands.insertContent({
           type: 'text',
           marks: [
@@ -244,17 +240,17 @@ export const ContractVariable = Mark.create({
           text: `[${variableName}]`,
         })
       },
-      updateVariable: (variableName: string, value: any) => ({ editor }) => {
+      updateVariable: (variableName: string, value: any) => ({ editor }: any) => {
         this.options.variables[variableName] = value
         editor.view.updateState(editor.state)
         return true
       },
-      updateAllVariables: (variables: Record<string, any>) => ({ editor }) => {
+      updateAllVariables: (variables: Record<string, any>) => ({ editor }: any) => {
         this.options.variables = { ...this.options.variables, ...variables }
         editor.view.updateState(editor.state)
         return true
       },
-    }
+    } as any
   },
 })
 
@@ -294,7 +290,7 @@ export const CommentThread = Extension.create({
 
   addCommands() {
     return {
-      addCommentThread: (comment: string) => ({ editor, commands }) => {
+      addCommentThread: (comment: string) => ({ editor, commands }: any) => {
         const threadId = `thread-${Date.now()}`
         const { from, to } = editor.state.selection
         
@@ -309,11 +305,11 @@ export const CommentThread = Extension.create({
         
         return commands.updateAttributes('paragraph', { commentThreadId: threadId })
       },
-      resolveCommentThread: (threadId: string) => ({ commands }) => {
+      resolveCommentThread: (threadId: string) => ({ commands }: any) => {
         this.options.onCommentResolve(threadId)
         return commands.updateAttributes('paragraph', { commentThreadId: null })
       },
-    }
+    } as any
   },
 
   addProseMirrorPlugins() {
@@ -359,19 +355,19 @@ export const VersionComparison = Extension.create({
 
   addCommands() {
     return {
-      enableVersionComparison: (oldVersion: any, newVersion: any) => ({ editor }) => {
+      enableVersionComparison: (oldVersion: any, newVersion: any) => ({ editor }: any) => {
         this.options.oldVersion = oldVersion
         this.options.newVersion = newVersion
         this.options.showDiff = true
         editor.view.updateState(editor.state)
         return true
       },
-      disableVersionComparison: () => ({ editor }) => {
+      disableVersionComparison: () => ({ editor }: any) => {
         this.options.showDiff = false
         editor.view.updateState(editor.state)
         return true
       },
-    }
+    } as any
   },
 })
 

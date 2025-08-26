@@ -212,13 +212,14 @@ export const ContractValidationExtension = Extension.create({
   },
   
   addCommands() {
+    const self = this
     return {
-      validateDocument: () => ({ editor }) => {
+      validateDocument: () => ({ editor }: any) => {
         const content = editor.getText()
         const validation = ContractValidator.validateDocument(content)
         
         // Store validation results
-        this.storage.validationResults = validation
+        self.storage.validationResults = validation
         
         // Trigger validation event
         editor.emit('validation:complete', validation)
@@ -226,7 +227,7 @@ export const ContractValidationExtension = Extension.create({
         return true
       },
       
-      fixValidationIssue: (type: string) => ({ commands }) => {
+      fixValidationIssue: (type: string) => ({ commands }: any) => {
         switch (type) {
           case 'add_title':
             return commands.insertContent('# Contract Title\n\n')
@@ -240,27 +241,25 @@ export const ContractValidationExtension = Extension.create({
             return false
         }
       }
-    }
+    } as any
   },
   
   onCreate() {
     // Set up periodic validation
     if (this.options.enableRealTimeValidation) {
-      this.triggerValidation()
-    }
-  },
-  
-  triggerValidation() {
-    // Debounce validation
-    if (this.storage.validationTimer) {
-      clearTimeout(this.storage.validationTimer)
-    }
-    
-    this.storage.validationTimer = setTimeout(() => {
-      if (this.editor) {
-        this.editor.commands.validateDocument()
+      // Trigger initial validation with delay
+      const self = this
+      if (self.storage.validationTimer) {
+        clearTimeout(self.storage.validationTimer)
       }
-    }, this.options.validationDelay)
+      
+      self.storage.validationTimer = setTimeout(() => {
+        if (self.editor) {
+          // TypeScript doesn't recognize custom commands, so we use any
+          (self.editor.commands as any).validateDocument()
+        }
+      }, self.options.validationDelay)
+    }
   }
 })
 
