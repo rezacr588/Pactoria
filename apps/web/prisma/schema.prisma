@@ -102,16 +102,20 @@ model contract_parties {
 }
 
 model contract_versions {
-  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contract_id        String               @db.Uuid
-  version_number     Int
-  ydoc_state         Bytes?
-  content_md         String?
-  content_json       Json?
-  created_by         String?              @db.Uuid
-  created_at         DateTime             @default(now()) @db.Timestamptz(6)
-  contract_approvals contract_approvals[]
-  contracts          contracts            @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+  id                      String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id             String                 @db.Uuid
+  version_number          Int
+  ydoc_state              Bytes?
+  content_md              String?
+  content_json            Json?
+  created_by              String?                @db.Uuid
+  created_at              DateTime               @default(now()) @db.Timestamptz(6)
+  contract_approvals      contract_approvals[]
+  contract_comments       contract_comments[]
+  contract_redlines       contract_redlines[]
+  old_version_comparisons version_comparisons[]  @relation("OldVersionComparison")
+  new_version_comparisons version_comparisons[]  @relation("NewVersionComparison")
+  contracts               contracts              @relation(fields: [contract_id], references: [id], onDelete: Cascade)
 
   @@unique([contract_id, version_number])
   @@index([contract_id], map: "idx_versions_contract")
@@ -133,6 +137,12 @@ model contracts {
   contract_metadata      contract_metadata[]
   contract_parties       contract_parties[]
   contract_versions      contract_versions[]
+  clause_usage           clause_usage[]
+  contract_comments      contract_comments[]
+  contract_redlines      contract_redlines[]
+  contract_variables     contract_variables[]
+  version_comparisons    version_comparisons[]
+  collab_sessions        collab_sessions[]
 
   @@index([owner_id], map: "idx_contracts_owner")
 }
@@ -315,4 +325,215 @@ model usage_tracking {
 
   @@unique([user_id, resource_type, resource_id, date])
   @@index([user_id, date], map: "idx_usage_tracking_user_date")
+}
+
+// Clause Library - Pre-approved legal clauses that can be inserted
+model clause_library {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title            String
+  category         String
+  content          String
+  content_html     String?
+  description      String?
+  tags             String[]       @default([])
+  risk_level       String?        // low, medium, high
+  jurisdiction     String         @default("General")
+  created_by       String         @db.Uuid
+  organization_id  String?        @db.Uuid
+  is_public        Boolean        @default(false)
+  is_official      Boolean        @default(false)
+  usage_count      Int            @default(0)
+  last_used_at     DateTime?      @db.Timestamptz(6)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
+  
+  // Relations
+  clause_usage     clause_usage[]
+  user_favorites   user_clause_favorites[]
+
+  @@index([category], map: "idx_clause_library_category")
+  @@index([created_by], map: "idx_clause_library_created_by")
+  @@index([organization_id], map: "idx_clause_library_org")
+  @@index([is_public], map: "idx_clause_library_public")
+  @@index([jurisdiction], map: "idx_clause_library_jurisdiction")
+}
+
+// Track clause usage for analytics
+model clause_usage {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clause_id    String         @db.Uuid
+  contract_id  String         @db.Uuid
+  user_id      String         @db.Uuid
+  used_at      DateTime       @default(now()) @db.Timestamptz(6)
+  
+  // Relations
+  clause       clause_library @relation(fields: [clause_id], references: [id], onDelete: Cascade)
+  contract     contracts      @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@index([clause_id], map: "idx_clause_usage_clause")
+  @@index([contract_id], map: "idx_clause_usage_contract")
+  @@index([user_id], map: "idx_clause_usage_user")
+  @@index([used_at], map: "idx_clause_usage_used_at")
+}
+
+// User favorites for clauses
+model user_clause_favorites {
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id   String         @db.Uuid
+  clause_id String         @db.Uuid
+  added_at  DateTime       @default(now()) @db.Timestamptz(6)
+  
+  // Relations
+  clause    clause_library @relation(fields: [clause_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, clause_id])
+  @@index([user_id], map: "idx_user_clause_favorites_user")
+}
+
+// Contract Comments/Threads for negotiations
+model contract_comments {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id      String                 @db.Uuid
+  version_id       String?                @db.Uuid
+  thread_id        String?                @db.Uuid  // For threading replies
+  parent_comment_id String?               @db.Uuid  // For nested replies
+  author_id        String                 @db.Uuid
+  content          String
+  comment_type     String                 @default("general") // general, suggestion, question, approval
+  is_internal      Boolean                @default(false)    // Internal vs external comments
+  is_resolved      Boolean                @default(false)
+  selection_start  Int?                   // For text-specific comments
+  selection_end    Int?
+  selection_text   String?
+  created_at       DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime               @default(now()) @db.Timestamptz(6)
+  resolved_at      DateTime?              @db.Timestamptz(6)
+  resolved_by      String?                @db.Uuid
+  
+  // Relations
+  contract         contracts              @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+  version          contract_versions?     @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  parent_comment   contract_comments?     @relation("CommentReplies", fields: [parent_comment_id], references: [id], onDelete: Cascade)
+  replies          contract_comments[]    @relation("CommentReplies")
+
+  @@index([contract_id], map: "idx_contract_comments_contract")
+  @@index([version_id], map: "idx_contract_comments_version")
+  @@index([thread_id], map: "idx_contract_comments_thread")
+  @@index([author_id], map: "idx_contract_comments_author")
+  @@index([is_resolved], map: "idx_contract_comments_resolved")
+  @@index([created_at], map: "idx_contract_comments_created")
+}
+
+// Track changes/Redlines for contract versions
+model contract_redlines {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id      String             @db.Uuid
+  version_id       String             @db.Uuid
+  author_id        String             @db.Uuid
+  redline_type     String             // addition, deletion, modification
+  content_before   String?            // Original content for deletions/modifications
+  content_after    String?            // New content for additions/modifications
+  selection_start  Int
+  selection_end    Int
+  comment          String?            // Explanation of the change
+  status           String             @default("pending") // pending, accepted, rejected
+  accepted_by      String?            @db.Uuid
+  accepted_at      DateTime?          @db.Timestamptz(6)
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  
+  // Relations
+  contract         contracts          @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+  version          contract_versions  @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  @@index([contract_id], map: "idx_contract_redlines_contract")
+  @@index([version_id], map: "idx_contract_redlines_version")
+  @@index([author_id], map: "idx_contract_redlines_author")
+  @@index([status], map: "idx_contract_redlines_status")
+  @@index([created_at], map: "idx_contract_redlines_created")
+}
+
+// Contract Variables - Smart fields that can be auto-populated
+model contract_variables {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id      String    @db.Uuid
+  variable_name    String
+  variable_type    String    @default("text") // text, date, number, currency, party, email
+  current_value    String?
+  default_value    String?
+  is_required      Boolean   @default(false)
+  validation_rules Json?     // JSON schema for validation
+  description      String?
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @db.Timestamptz(6)
+  
+  // Relations
+  contract         contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@unique([contract_id, variable_name])
+  @@index([contract_id], map: "idx_contract_variables_contract")
+  @@index([variable_type], map: "idx_contract_variables_type")
+}
+
+// Version Comparison History
+model version_comparisons {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id      String             @db.Uuid
+  old_version_id   String             @db.Uuid
+  new_version_id   String             @db.Uuid
+  compared_by      String             @db.Uuid
+  comparison_data  Json?              // Store diff results
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  
+  // Relations
+  contract         contracts          @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+  old_version      contract_versions  @relation("OldVersionComparison", fields: [old_version_id], references: [id], onDelete: Cascade)
+  new_version      contract_versions  @relation("NewVersionComparison", fields: [new_version_id], references: [id], onDelete: Cascade)
+
+  @@index([contract_id], map: "idx_version_comparisons_contract")
+  @@index([compared_by], map: "idx_version_comparisons_user")
+  @@index([created_at], map: "idx_version_comparisons_created")
+}
+
+// Collaboration Sessions - Track live editing sessions
+model collab_sessions {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contract_id      String    @db.Uuid
+  user_id          String    @db.Uuid
+  session_id       String    // WebRTC/Yjs session identifier
+  user_name        String
+  user_email       String
+  user_color       String?
+  cursor_position  Int?
+  is_active        Boolean   @default(true)
+  last_seen        DateTime  @default(now()) @db.Timestamptz(6)
+  joined_at        DateTime  @default(now()) @db.Timestamptz(6)
+  left_at          DateTime? @db.Timestamptz(6)
+  
+  // Relations
+  contract         contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@unique([contract_id, user_id, session_id])
+  @@index([contract_id], map: "idx_collab_sessions_contract")
+  @@index([user_id], map: "idx_collab_sessions_user")
+  @@index([is_active], map: "idx_collab_sessions_active")
+  @@index([last_seen], map: "idx_collab_sessions_last_seen")
+}
+
+// Legal Section Templates
+model legal_sections {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  section_name     String
+  section_type     String   // preamble, recitals, definitions, terms, etc.
+  content_template String
+  description      String?
+  jurisdiction     String   @default("General")
+  is_standard      Boolean  @default(true)
+  order_index      Int      @default(0)
+  created_by       String?  @db.Uuid
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([section_type], map: "idx_legal_sections_type")
+  @@index([jurisdiction], map: "idx_legal_sections_jurisdiction")
+  @@index([order_index], map: "idx_legal_sections_order")
 }

@@ -1,10 +1,11 @@
 'use client'
 
 import React, { useState, useCallback } from 'react'
+import Head from 'next/head'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
-import LiveCollaborativeEditor from '@/components/editor/LiveCollaborativeEditor'
+import ContractEditor from '@/components/editor/ContractEditor'
 import PresenceAvatars from '@/components/editor/PresenceAvatars'
 import VersionTimeline from '@/components/versions/VersionTimeline'
 import ApprovalsPanel from '@/components/approvals/ApprovalsPanel'
@@ -154,7 +155,19 @@ export default function ContractDetailPage() {
   } : undefined
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      <Head>
+        <title>{contract?.title ? `${contract.title} - Contract` : 'Contract Details'} | Pactoria</title>
+        <meta name="description" content={`Edit and manage your contract: ${contract?.title || 'Contract Details'}. Collaborate in real-time with advanced contract editing features.`} />
+        <meta name="keywords" content="contract editing, collaborative editing, contract management, contract details, legal document editor" />
+        <meta property="og:title" content={`${contract?.title || 'Contract Details'} | Pactoria`} />
+        <meta property="og:description" content={`Edit and manage your contract: ${contract?.title || 'Contract Details'}. Collaborate in real-time with advanced contract editing features.`} />
+        <meta property="og:type" content="article" />
+        <meta name="twitter:title" content={`${contract?.title || 'Contract Details'} | Pactoria`} />
+        <meta name="twitter:description" content={`Edit and manage your contract: ${contract?.title || 'Contract Details'}. Collaborate in real-time with advanced contract editing features.`} />
+        <meta name="robots" content="noindex, nofollow" />
+      </Head>
+      <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="space-y-6">
           {/* Header */}
@@ -263,7 +276,7 @@ export default function ContractDetailPage() {
                 </TabsList>
 
                 <TabsContent value="editor" className="space-y-4">
-                  <LiveCollaborativeEditor
+                  <ContractEditor
                     contractId={contractId}
                     initialContent={latestVersion?.content_json}
                     onSave={handleSaveSnapshot}
@@ -377,6 +390,7 @@ export default function ContractDetailPage() {
         isOpen={showShareDialog}
         onClose={() => setShowShareDialog(false)}
       />
-    </div>
+      </div>
+    </>
   )
 }

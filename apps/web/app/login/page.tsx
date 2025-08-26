@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Head from 'next/head'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -39,7 +40,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <>
+      <Head>
+        <title>Sign In to Your Account | Pactoria</title>
+        <meta name="description" content="Sign in to your Pactoria account to access AI-powered contract management tools. Secure login with email or social authentication." />
+        <meta name="keywords" content="login, sign in, contract management login, secure access, authentication" />
+        <meta property="og:title" content="Sign In to Your Account | Pactoria" />
+        <meta property="og:description" content="Sign in to your Pactoria account to access AI-powered contract management tools. Secure login with email or social authentication." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Sign In to Your Account | Pactoria" />
+        <meta name="twitter:description" content="Sign in to your Pactoria account to access AI-powered contract management tools. Secure login with email or social authentication." />
+        <meta name="robots" content="noindex, nofollow" />
+      </Head>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <div className="p-6">
         <Link 
@@ -210,6 +223,7 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }

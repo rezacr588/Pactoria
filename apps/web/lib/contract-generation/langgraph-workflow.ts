@@ -99,7 +99,7 @@ export class ContractGenerationGraph {
 
   // Legal Research Agent
   static async researchLegalRequirements(state: WorkflowState): Promise<WorkflowState> {
-    const { jurisdiction, governingLaw, contractType } = state.requirements
+    const { jurisdiction, contractType } = state.requirements
     
     // This would integrate with legal databases/APIs
     const legalRequirements = await this.fetchLegalRequirements(jurisdiction, contractType)
@@ -117,13 +117,11 @@ export class ContractGenerationGraph {
 
   // Clause Generation with Validation
   static async generateClauses(state: WorkflowState): Promise<WorkflowState> {
-    const { requirements } = state
-    
     // AI clause generation logic
-    const generatedClauses = await this.generateContractClauses(requirements)
+    const generatedClauses = await this.generateContractClauses()
     
     // Validate generated content
-    const validatedClauses = this.validateClauses(generatedClauses, requirements)
+    const validatedClauses = this.validateClauses(generatedClauses)
     
     return {
       ...state,
@@ -138,7 +136,7 @@ export class ContractGenerationGraph {
 
   // Risk Analysis Agent
   static analyzeRisks(state: WorkflowState): WorkflowState {
-    const riskFactors = this.identifyRiskFactors(state.contract, state.requirements)
+    const riskFactors = this.identifyRiskFactors()
     
     return {
       ...state,
@@ -152,7 +150,7 @@ export class ContractGenerationGraph {
   // Compliance Check Agent
   static checkCompliance(state: WorkflowState): WorkflowState {
     const { jurisdiction, governingLaw } = state.requirements
-    const complianceIssues = this.validateCompliance(state.contract, jurisdiction, governingLaw)
+    const complianceIssues = this.validateCompliance()
     
     if (complianceIssues.critical.length > 0) {
       return {
@@ -199,7 +197,7 @@ export class ContractGenerationGraph {
     }
   }
 
-  private static async generateContractClauses(requirements: any) {
+  private static async generateContractClauses() {
     // AI integration for clause generation
     return {
       content: "Generated contract content...",
@@ -207,7 +205,7 @@ export class ContractGenerationGraph {
     }
   }
 
-  private static validateClauses(clauses: any, requirements: any) {
+  private static validateClauses(clauses: any) {
     // Validation logic for generated clauses
     return {
       content: clauses.content,
@@ -215,7 +213,7 @@ export class ContractGenerationGraph {
     }
   }
 
-  private static identifyRiskFactors(contract: any, requirements: any) {
+  private static identifyRiskFactors() {
     return {
       high: [],
       medium: ["No liability cap specified"],
@@ -223,7 +221,7 @@ export class ContractGenerationGraph {
     }
   }
 
-  private static validateCompliance(contract: any, jurisdiction: string, governingLaw: string) {
+  private static validateCompliance() {
     return {
       critical: [],
       warnings: ["Signature requirements may vary by jurisdiction"]

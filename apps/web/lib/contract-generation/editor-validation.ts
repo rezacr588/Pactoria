@@ -226,7 +226,7 @@ export const ContractValidationExtension = Extension.create({
         return true
       },
       
-      fixValidationIssue: (type: string) => ({ editor, commands }) => {
+      fixValidationIssue: (type: string) => ({ commands }) => {
         switch (type) {
           case 'add_title':
             return commands.insertContent('# Contract Title\n\n')

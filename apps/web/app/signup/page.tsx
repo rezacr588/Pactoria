@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Head from 'next/head'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -58,7 +59,18 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <>
+      <Head>
+        <title>Create Your Account - Start Free Trial | Pactoria</title>
+        <meta name="description" content="Join thousands of teams using Pactoria for AI-powered contract management. Sign up for free and transform your contract workflow in minutes." />
+        <meta name="keywords" content="sign up, create account, free trial, contract management registration, join Pactoria" />
+        <meta property="og:title" content="Create Your Account - Start Free Trial | Pactoria" />
+        <meta property="og:description" content="Join thousands of teams using Pactoria for AI-powered contract management. Sign up for free and transform your contract workflow in minutes." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Create Your Account - Start Free Trial | Pactoria" />
+        <meta name="twitter:description" content="Join thousands of teams using Pactoria for AI-powered contract management. Sign up for free and transform your contract workflow in minutes." />
+      </Head>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <div className="p-6">
         <Link 
@@ -285,6 +297,7 @@ export default function SignupPage() {
           </Card>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }

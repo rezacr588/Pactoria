@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Head from 'next/head'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import contractsService from '@/lib/services/contracts'
 import apiClient from '@/lib/api-client'
 import { useTemplates } from '@/hooks/useTemplates'
-import EnhancedLiveCollaborativeEditor from '@/components/editor/EnhancedLiveCollaborativeEditor'
+import ContractEditor from '@/components/editor/ContractEditor'
 import PresenceAvatars from '@/components/editor/PresenceAvatars'
 import { ShareContractDialog } from '@/components/contracts/ShareContractDialog'
 import { 
@@ -260,7 +261,18 @@ This agreement shall be governed by the laws of [State/Country].
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      <Head>
+        <title>Create New Contract - AI Contract Generator | Pactoria</title>
+        <meta name="description" content="Create professional contracts using AI-powered generation or templates. Choose from various contract types and customize with intelligent suggestions." />
+        <meta name="keywords" content="create contract, contract generator, AI contract creation, legal document templates, contract automation" />
+        <meta property="og:title" content="Create New Contract - AI Contract Generator | Pactoria" />
+        <meta property="og:description" content="Create professional contracts using AI-powered generation or templates. Choose from various contract types and customize with intelligent suggestions." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Create New Contract - AI Contract Generator | Pactoria" />
+        <meta name="twitter:description" content="Create professional contracts using AI-powered generation or templates. Choose from various contract types and customize with intelligent suggestions." />
+      </Head>
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -378,7 +390,7 @@ This agreement shall be governed by the laws of [State/Country].
                         <Label htmlFor="content">Contract Content</Label>
                         {isCollaborationEnabled && contractId ? (
                           <div>
-                            <EnhancedLiveCollaborativeEditor
+                            <ContractEditor
                               contractId={contractId}
                               initialContent={content}
                               onSave={async (content: any) => {
@@ -387,8 +399,6 @@ This agreement shall be governed by the laws of [State/Country].
                                 console.log('Content saved:', content)
                               }}
                               className="min-h-[400px]"
-                              enableAIGeneration={true}
-                              enableRealTimeValidation={true}
                             />
                           </div>
                         ) : (
@@ -697,6 +707,7 @@ This agreement shall be governed by the laws of [State/Country].
           onClose={() => setShowShareDialog(false)}
         />
       )}
-    </div>
+      </div>
+    </>
   )
 }

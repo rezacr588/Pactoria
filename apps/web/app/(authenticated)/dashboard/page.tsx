@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Head from 'next/head'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import contractsService from '@/lib/services/contracts'
@@ -202,7 +203,18 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="py-8">
+    <>
+      <Head>
+        <title>Dashboard - Contract Management | Pactoria</title>
+        <meta name="description" content="Manage all your contracts in one place. View contract statistics, recent activities, and quick actions to streamline your contract workflow." />
+        <meta name="keywords" content="contract dashboard, contract management, contract statistics, contract analytics" />
+        <meta property="og:title" content="Dashboard - Contract Management | Pactoria" />
+        <meta property="og:description" content="Manage all your contracts in one place. View contract statistics, recent activities, and quick actions to streamline your contract workflow." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Dashboard - Contract Management | Pactoria" />
+        <meta name="twitter:description" content="Manage all your contracts in one place. View contract statistics, recent activities, and quick actions to streamline your contract workflow." />
+      </Head>
+      <div className="py-8">
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
@@ -498,6 +510,7 @@ export default function Dashboard() {
             </Card>
           </div>
         </div>
-    </div>
+      </div>
+    </>
   )
 }

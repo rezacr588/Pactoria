@@ -1,317 +1,616 @@
-"use client"
+'use client'
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { EditorContent, useEditor } from '@tiptap/react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
+import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
 import * as Y from 'yjs'
-import { supabase, functionsUrl } from '../../lib/supabaseClient'
-import { uint8ToBase64 } from './y-base64'
+import { WebrtcProvider } from 'y-webrtc'
+import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabaseClient'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import {
+  Bold,
+  Italic,
+  List,
+  ListOrdered,
+  Undo,
+  Redo,
+  Save,
+  Wifi,
+  WifiOff,
+  Users,
+  MessageSquare,
+  CheckCircle,
+  AlertCircle,
+  Library,
+  FileText,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { defaultContractTemplate } from '@/lib/templates/legal-templates'
 
+// Types
 interface ContractEditorProps {
-  contractId: string;
-  initialContent?: any;
-  onContentChange?: (content: any) => void;
+  contractId: string
+  initialContent?: any
+  onSave?: (content: any) => Promise<void>
+  onContentChange?: (content: any) => void
+  className?: string
+  readOnly?: boolean
 }
 
-export function ContractEditor({ contractId, initialContent, onContentChange }: ContractEditorProps) {
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [analyzing, setAnalyzing] = useState(false)
-  const [analysis, setAnalysis] = useState<any | null>(null)
-  const [generating, setGenerating] = useState(false)
-  const [prompt, setPrompt] = useState('')
-  const [template, setTemplate] = useState<string | null>(null)
-  const [peerCount, setPeerCount] = useState(1)
-  const [ydoc, setYdoc] = useState<Y.Doc | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
+interface ConnectedUser {
+  id: string
+  name: string
+  email: string
+  color: string
+  isTyping: boolean
+}
 
-  const room = `contract:${contractId}`
+interface Comment {
+  id: string
+  content: string
+  author: string
+  created_at: string
+  is_resolved: boolean
+  selection_start?: number
+  selection_end?: number
+}
 
-  // Create Y.Doc instance with proper cleanup
+
+interface Clause {
+  id: string
+  title: string
+  category: string
+  content: string
+  description: string
+  risk_level: 'low' | 'medium' | 'high'
+}
+
+// Utility functions
+const USER_COLORS = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57',
+  '#FF9FF3', '#54A0FF', '#5F27CD', '#00D2D3', '#FF9F43'
+]
+
+function getUserColor(userId: string): string {
+  const index = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  return USER_COLORS[index % USER_COLORS.length] || '#4D96FF'
+}
+
+// Main Component
+export default function ContractEditor({
+  contractId,
+  initialContent,
+  onSave,
+  onContentChange,
+  className,
+  readOnly = false
+}: ContractEditorProps) {
+  // Core state
+  const { user } = useAuth()
+  const [ydoc] = useState(() => new Y.Doc())
+  const [provider, setProvider] = useState<WebrtcProvider | null>(null)
+  const providerRef = useRef<WebrtcProvider | null>(null)
+  
+  // Connection state
+  const [isConnected, setIsConnected] = useState(false)
+  const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([])
+  
+  // Editor state
+  const [isSaving, setIsSaving] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  
+  // UI state
+  const [showComments, setShowComments] = useState(false)
+  const [showClauseLibrary, setShowClauseLibrary] = useState(false)
+  
+  // Data state
+  const [comments, setComments] = useState<Comment[]>([])
+  const [clauses, setClauses] = useState<Clause[]>([])
+
+  // Initialize collaboration
   useEffect(() => {
-    const doc = new Y.Doc()
-    setYdoc(doc)
-    
+    if (!user || !contractId) return
+
+    const initializeCollaboration = async () => {
+      try {
+        const roomName = `contract:${contractId}`
+        const webrtcProvider = new WebrtcProvider(roomName, ydoc, {
+          signaling: ['wss://signaling.yjs.dev'],
+          maxConns: 20,
+          filterBcConns: true,
+          password: contractId
+        })
+
+        providerRef.current = webrtcProvider
+        setProvider(webrtcProvider)
+
+        webrtcProvider.on('status', ({ connected }: { connected: boolean }) => {
+          setIsConnected(connected)
+        })
+
+        webrtcProvider.on('peers', () => {
+          updateConnectedUsers()
+        })
+
+        // Initialize Supabase Realtime for presence
+        const presenceChannel = supabase.channel(`presence:contract:${contractId}`, {
+          config: { presence: { key: user.id } }
+        })
+
+        presenceChannel
+          .on('presence', { event: 'sync' }, () => updateConnectedUsers())
+          .on('presence', { event: 'join' }, () => updateConnectedUsers())
+          .on('presence', { event: 'leave' }, () => updateConnectedUsers())
+          .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+              await presenceChannel.track({
+                user_id: user.id,
+                name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Anonymous',
+                email: user.email || '',
+                color: getUserColor(user.id),
+                online_at: new Date().toISOString(),
+                contract_id: contractId,
+                is_editing: true
+              })
+            }
+          })
+
+        return () => {
+          presenceChannel.untrack()
+          presenceChannel.unsubscribe()
+        }
+
+      } catch (error) {
+        console.error('Failed to initialize collaboration:', error)
+        setIsConnected(false)
+        return () => {} // Return empty cleanup function on error
+      }
+    }
+
+    initializeCollaboration()
+
     return () => {
-      // Cleanup Y.Doc when component unmounts or contractId changes
-      doc.destroy()
+      if (providerRef.current) {
+        providerRef.current.destroy()
+      }
+    }
+  }, [user, contractId, ydoc])
+
+  // Update connected users
+  const updateConnectedUsers = useCallback(() => {
+    if (!provider || !user) return
+
+    const awarenessUsers: ConnectedUser[] = Array.from(provider.awareness.getStates().values())
+      .filter((state: any) => state.user && state.user.id !== user.id)
+      .map((state: any) => ({
+        id: state.user.id,
+        name: state.user.name,
+        email: state.user.email,
+        color: state.user.color,
+        isTyping: state.isTyping || false
+      }))
+    
+    setConnectedUsers(awarenessUsers)
+  }, [provider, user])
+
+  // Fetch data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [commentsRes, clausesRes] = await Promise.all([
+          fetch(`/api/contracts/${contractId}/comments`).catch(() => ({ ok: false })),
+          fetch('/api/clauses?limit=20').catch(() => ({ ok: false }))
+        ])
+        
+        if (commentsRes.ok && 'json' in commentsRes) {
+          const data = await commentsRes.json()
+          setComments(data.comments || [])
+        }
+
+        if (clausesRes.ok && 'json' in clausesRes) {
+          const data = await clausesRes.json()
+          setClauses(data.clauses || [])
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error)
+      }
+    }
+
+    if (contractId) {
+      fetchData()
     }
   }, [contractId])
 
-  // Init TipTap with Yjs document
+  // Initialize editor
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ history: false }),
-      ydoc ? Collaboration.configure({ document: ydoc }) : StarterKit,
+      StarterKit.configure({
+        history: false, // Yjs handles history
+      }),
+      Collaboration.configure({
+        document: ydoc,
+      }),
+      ...(provider && user ? [
+        CollaborationCursor.configure({
+          provider,
+          user: {
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Anonymous',
+            color: getUserColor(user.id),
+          },
+        })
+      ] : []),
     ],
-    editable: true,
-    content: initialContent || '',
+    content: initialContent || defaultContractTemplate,
+    editable: !readOnly,
     onUpdate: ({ editor }) => {
+      setHasUnsavedChanges(true)
       if (onContentChange) {
         onContentChange(editor.getJSON())
       }
-    },
-  }, [ydoc]) // Re-create editor when ydoc changes
-
-  // Load initial content or latest saved content
-  useEffect(() => {
-    if (!editor || !ydoc) return
-    
-    // If initialContent is provided, use it
-    if (initialContent) {
-      editor.commands.setContent(initialContent)
-      return
-    }
-    
-    // Otherwise, load from database
-    const controller = new AbortController()
-    
-    ;(async () => {
-      try {
-        const { data, error } = await supabase
-          .from('contract_versions')
-          .select('content_json')
-          .eq('contract_id', contractId)
-          .order('version_number', { ascending: false })
-          .limit(1)
-        
-        if (controller.signal.aborted) return
-        
-        if (error) throw error
-        const latest = data?.[0]?.content_json
-        if (latest) {
-          editor.commands.setContent(latest)
-        }
-      } catch (_) {
-        // ignore initial load errors
-      }
-    })()
-    
-    return () => {
-      controller.abort()
-    }
-  }, [contractId, editor, initialContent, ydoc])
-
-  // Attach y-webrtc provider (P2P) so Yjs can sync with peers
-  useEffect(() => {
-    if (!ydoc) return
-    
-    let provider: any
-    let cancelled = false
-    
-    ;(async () => {
-      const mod = await import('y-webrtc')
-      if (cancelled || !ydoc) return
-      
-      const WebrtcProvider = mod.WebrtcProvider
-      provider = new WebrtcProvider(room, ydoc, {
-        signaling: ['wss://signaling.yjs.dev'],
-      })
-      
-      try {
-        const aw = provider.awareness
-        const update = () => {
-          if (!cancelled) {
-            try {
-              setPeerCount(aw.getStates().size)
-            } catch (_) {}
-          }
-        }
-        aw.on('change', update)
-        update()
-      } catch (_) {}
-    })()
-    
-    return () => {
-      cancelled = true
+      // Update typing status in awareness
       if (provider) {
-        provider.destroy()
+        provider.awareness.setLocalStateField('isTyping', true)
+        setTimeout(() => {
+          provider.awareness.setLocalStateField('isTyping', false)
+        }, 1000)
       }
-    }
-  }, [room, ydoc])
+    },
+  }, [ydoc, provider, user])
 
-  const saveSnapshot = useCallback(async () => {
-    if (!editor || !ydoc) return
-    setSaving(true)
-    setError(null)
-    
-    // Cancel any previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    abortControllerRef.current = new AbortController()
-    
+  // Handlers
+  const handleSave = useCallback(async () => {
+    if (!editor || !onSave) return
+
+    setIsSaving(true)
     try {
-      const contentJson = editor.getJSON() as any
-      const update = Y.encodeStateAsUpdate(ydoc)
-      const base64 = uint8ToBase64(update)
-
-      // Use Supabase RPC instead of Next.js API for consistency
-      const { data: session } = await supabase.auth.getSession()
-      if (!session?.session) {
-        throw new Error('Not authenticated')
-      }
-
-      const { error } = await supabase.rpc('take_snapshot', {
-        p_contract_id: contractId,
-        p_content_json: contentJson,
-        p_content_md: null,
-        p_ydoc_state_base64: base64,
-      })
-
-      if (error) throw error
-      
-      // Notify listeners (e.g., VersionTimeline) that a snapshot was saved
-      try {
-        window.dispatchEvent(new CustomEvent('contract:snapshot-saved', { detail: { contractId } }))
-      } catch (_) {}
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
-        setError(e?.message ?? 'Failed to save snapshot')
-      }
+      const content = editor.getJSON()
+      await onSave(content)
+      setHasUnsavedChanges(false)
+      setLastSaved(new Date())
+    } catch (error) {
+      console.error('Failed to save:', error)
     } finally {
-      setSaving(false)
-      abortControllerRef.current = null
+      setIsSaving(false)
     }
-  }, [contractId, editor, ydoc])
+  }, [editor, onSave])
 
-  const analyzeRisks = useCallback(async () => {
-    if (!editor) return
-    setAnalyzing(true)
-    setError(null)
-    
-    const controller = new AbortController()
-    
-    try {
-      const text = editor.getText()
-      const { data: sess } = await supabase.auth.getSession()
-      const res = await fetch(`${functionsUrl}/functions/v1/ai/analyze-risks`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sess.session?.access_token ? { 'Authorization': `Bearer ${sess.session.access_token}` } : {}),
-        },
-        body: JSON.stringify({ text }),
-        signal: controller.signal,
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'AI analyze failed')
-      setAnalysis(json)
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
-        setError(e?.message ?? 'Failed to analyze risks')
-      }
-    } finally {
-      setAnalyzing(false)
+  const insertClause = useCallback((clause: Clause) => {
+    if (editor) {
+      editor.chain().focus().insertContent(clause.content).run()
+      setShowClauseLibrary(false)
     }
   }, [editor])
 
-  const generateTemplate = useCallback(async () => {
+  const insertSection = useCallback((sectionType: string) => {
     if (!editor) return
-    setGenerating(true)
-    setError(null)
-    setTemplate(null)
     
-    const controller = new AbortController()
-    
-    try {
-      const { data: sess } = await supabase.auth.getSession()
-      const res = await fetch(`${functionsUrl}/functions/v1/ai/generate-template`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sess.session?.access_token ? { 'Authorization': `Bearer ${sess.session.access_token}` } : {}),
-        },
-        body: JSON.stringify({ prompt }),
-        signal: controller.signal,
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'AI generate failed')
-      setTemplate(json.result || '')
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
-        setError(e?.message ?? 'Failed to generate template')
-      }
-    } finally {
-      setGenerating(false)
+    const templates: Record<string, string> = {
+      preamble: '<h2>Preamble</h2><p>This Agreement is entered into as of [DATE], by and between [PARTY_A] and [PARTY_B].</p>',
+      definitions: '<h2>Definitions</h2><p><strong>"Agreement"</strong> means this contract agreement.</p>',
+      terms: '<h2>Terms and Conditions</h2><ol><li>[Term 1]</li><li>[Term 2]</li></ol>',
     }
-  }, [prompt, editor])
+    
+    const template = templates[sectionType] || '<h2>Section</h2><p>[Content]</p>'
+    editor.chain().focus().insertContent(template).run()
+  }, [editor])
 
-  const insertTemplateIntoEditor = useCallback(() => {
-    if (!editor || !template) return
-    // Simple transform: split by double newline into paragraphs
-    const paras = template.split(/\n\n+/).map((p) => ({ type: 'paragraph', content: [{ type: 'text', text: p }] }))
-    editor.commands.setContent({ type: 'doc', content: paras })
-  }, [editor, template])
+  // Auto-save functionality
+  useEffect(() => {
+    if (!hasUnsavedChanges || !onSave) return
+
+    const autoSaveTimer = setTimeout(() => {
+      handleSave()
+    }, 30000) // Auto-save after 30 seconds
+
+    return () => clearTimeout(autoSaveTimer)
+  }, [hasUnsavedChanges, handleSave, onSave])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [handleSave])
+
+  if (!editor) {
+    return (
+      <div className={cn('flex items-center justify-center h-64 border rounded-lg', className)}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">Initializing contract editor...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600">Room: <span className="font-mono">{room}</span> · Peers: <span className="font-mono">{peerCount}</span></div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={saveSnapshot}
-            disabled={saving}
-            className="rounded-md bg-primary-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : 'Save Snapshot'}
-          </button>
-          <button
-            onClick={analyzeRisks}
-            disabled={analyzing}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-          >
-            {analyzing ? 'Analyzing…' : 'Analyze Risks'}
-          </button>
+    <div className={cn('flex flex-col h-full border rounded-lg bg-white', className)}>
+      {/* Toolbar */}
+      <div className="border-b bg-white">
+        <div className="flex items-center justify-between px-4 py-2">
+          {/* Formatting Tools */}
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className={cn('h-8 w-8 p-0', editor.isActive('bold') && 'bg-muted')}
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className={cn('h-8 w-8 p-0', editor.isActive('italic') && 'bg-muted')}
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+            <Separator orientation="vertical" className="h-6 mx-1" />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              className={cn('h-8 w-8 p-0', editor.isActive('bulletList') && 'bg-muted')}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              className={cn('h-8 w-8 p-0', editor.isActive('orderedList') && 'bg-muted')}
+            >
+              <ListOrdered className="h-4 w-4" />
+            </Button>
+
+            <Separator orientation="vertical" className="h-6 mx-1" />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().undo().run()}
+              disabled={!editor.can().undo()}
+              className="h-8 w-8 p-0"
+            >
+              <Undo className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().redo().run()}
+              disabled={!editor.can().redo()}
+              className="h-8 w-8 p-0"
+            >
+              <Redo className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Contract Tools */}
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => insertSection('preamble')}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Sections
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowClauseLibrary(true)}
+            >
+              <Library className="h-4 w-4 mr-2" />
+              Clauses
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowComments(!showComments)}
+              className={cn(showComments && 'bg-muted')}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Comments ({comments.filter(c => !c.is_resolved).length})
+            </Button>
+          </div>
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-md border border-red-500 bg-red-50 p-2 text-sm text-red-500">
-          {error}
-        </div>
-      )}
+      {/* Status Bar */}
+      <div className="border-b px-4 py-2 bg-gray-50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            {/* Connection Status */}
+            <div className={cn('flex items-center space-x-1', {
+              'text-green-600': isConnected,
+              'text-red-600': !isConnected
+            })}>
+              {isConnected ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+              <span className="text-xs font-medium">
+                {isConnected ? 'Live' : 'Connecting...'}
+              </span>
+            </div>
 
-      <div className="rounded-lg bg-white p-4 shadow-card">
-        <h3 className="mb-2 font-medium">AI Template Generator</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g. 2-page NDA between startup and contractor"
-            className="min-w-[280px] flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-          <button
-            onClick={generateTemplate}
-            disabled={generating || !prompt.trim()}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-          >
-            {generating ? 'Generating…' : 'Generate'}
-          </button>
-          <button
-            onClick={insertTemplateIntoEditor}
-            disabled={!template}
-            className="rounded-md bg-primary-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-60"
-          >
-            Insert into Editor
-          </button>
+            {/* Connected Users */}
+            {connectedUsers.length > 0 && (
+              <div className="flex items-center space-x-1">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <div className="flex -space-x-1">
+                  {connectedUsers.slice(0, 3).map((user) => (
+                    <div
+                      key={user.id}
+                      className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-xs font-medium text-white relative"
+                      style={{ backgroundColor: user.color }}
+                      title={`${user.name} ${user.isTyping ? '(typing...)' : ''}`}
+                    >
+                      {user.name.charAt(0).toUpperCase()}
+                      {user.isTyping && (
+                        <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <span className="text-xs text-muted-foreground ml-2">
+                  {connectedUsers.length} online
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-2">
+            {/* Save Status */}
+            <div className="flex items-center space-x-1 text-xs">
+              {isSaving ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b border-primary" />
+                  <span className="text-muted-foreground">Saving...</span>
+                </>
+              ) : hasUnsavedChanges ? (
+                <>
+                  <AlertCircle className="h-3 w-3 text-yellow-600" />
+                  <span className="text-yellow-600">Unsaved changes</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-3 w-3 text-green-600" />
+                  <span className="text-green-600">Saved</span>
+                  {lastSaved && (
+                    <span className="text-muted-foreground ml-2">
+                      {lastSaved.toLocaleTimeString()}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+
+            {onSave && (
+              <Button
+                onClick={handleSave}
+                disabled={isSaving || !hasUnsavedChanges}
+                size="sm"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save
+              </Button>
+            )}
+          </div>
         </div>
-        {template && (
-          <pre className="mt-3 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-md bg-gray-50 p-3 text-xs text-gray-800">{template}</pre>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Main Editor */}
+        <div className="flex-1 relative">
+          <EditorContent
+            editor={editor}
+            className="h-full prose prose-lg max-w-none p-6 focus-within:outline-none overflow-auto"
+          />
+
+          {/* Bubble Menu */}
+          {editor && !readOnly && (
+            <BubbleMenu
+              editor={editor}
+              tippyOptions={{ duration: 100 }}
+              className="bg-black text-white px-2 py-1 rounded-lg flex items-center space-x-1"
+            >
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().toggleBold().run()}
+                className={cn('h-8 w-8 p-0 text-white hover:bg-gray-700', editor.isActive('bold') && 'bg-gray-600')}
+              >
+                <Bold className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().toggleItalic().run()}
+                className={cn('h-8 w-8 p-0 text-white hover:bg-gray-700', editor.isActive('italic') && 'bg-gray-600')}
+              >
+                <Italic className="h-3 w-3" />
+              </Button>
+            </BubbleMenu>
+          )}
+        </div>
+
+        {/* Side Panel */}
+        {(showComments || showClauseLibrary) && (
+          <div className="w-80 border-l bg-gray-50 flex flex-col">
+            <ScrollArea className="flex-1 p-4">
+              {showComments && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-sm">Comments</h3>
+                  {comments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No comments yet. Select text and add a comment to get started.
+                    </p>
+                  ) : (
+                    comments.map((comment) => (
+                      <Card key={comment.id} className="p-3">
+                        <CardContent className="p-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-sm">{comment.author}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-sm mb-2">{comment.content}</p>
+                          {!comment.is_resolved && (
+                            <Button variant="outline" size="sm">
+                              Resolve
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {showClauseLibrary && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-sm">Clause Library</h3>
+                  {clauses.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No clauses available.
+                    </p>
+                  ) : (
+                    clauses.map((clause) => (
+                      <Card key={clause.id} className="p-3 cursor-pointer hover:bg-gray-50" onClick={() => insertClause(clause)}>
+                        <CardContent className="p-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="font-medium text-sm">{clause.title}</h4>
+                            <Badge variant={clause.risk_level === 'high' ? 'secondary' : 'secondary'} className="text-xs">
+                              {clause.risk_level}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">{clause.description}</p>
+                          <Badge variant="outline" className="text-xs">{clause.category}</Badge>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
         )}
       </div>
-
-      <div className="rounded-md border bg-white p-3 shadow-card" data-testid="contract-editor">
-        <EditorContent editor={editor} />
-      </div>
-
-      {analysis && (
-        <div className="rounded-lg bg-white p-4 shadow-card">
-          <h3 className="mb-2 font-medium">Risk Analysis</h3>
-          <pre className="whitespace-pre-wrap break-words rounded-md bg-gray-50 p-3 text-xs text-gray-800">{JSON.stringify(analysis, null, 2)}</pre>
-        </div>
-      )}
     </div>
   )
 }

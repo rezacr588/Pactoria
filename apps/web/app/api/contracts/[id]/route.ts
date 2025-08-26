@@ -50,10 +50,13 @@ export const GET = apiHandler(async (request: NextRequest, { params }: { params:
       return errorResponse('Contract not found', 404)
     }
 
+    // Extract versions and approvals from the contract object
+    const { contract_versions, contract_approvals, ...contractData } = contract
+    
     return successResponse({
-      contract,
-      versions: contract.contract_versions || [],
-      approvals: contract.contract_approvals || []
+      contract: contractData,
+      versions: contract_versions || [],
+      approvals: contract_approvals || []
     })
   } catch (error: any) {
     console.error('Error fetching contract:', error)
